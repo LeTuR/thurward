@@ -1,0 +1,98 @@
+#!/usr/sbin/nft -f
+# Translation of /examples/rules.yaml for nftables candidate.
+#
+# Translation discipline (per tests/benchmarks.md § 0.7):
+#   - Uses NAMED SETS for the source CIDR (verdict-map-style structured
+#     matching). A flat-rule translation would understate nftables'
+#     performance characteristics (Ding 2018, Red Hat 2017).
+#   - Stateful inspection via `ct state` — matches the
+#     `state: established` semantics in rules.yaml.
+#   - SNAT/masquerade and DNAT live in the `nat` chain prerouting and
+#     postrouting hooks, separate from the filter chain — mirrors
+#     thurward's separation of NAT rules from filter rules.
+#   - FQDN rules are NOT translated in Tier 0. nftables has no native
+#     `destination_fqdn` semantic; the sidecar-resolver + ipset feeder
+#     pattern needed for parity is its own ADR (deferred).
+#
+# Interfaces (per cloud-init):
+#   ens3 = LAN (10.10.0.0/24)
+#   ens4 = WAN (203.0.113.0/24)
+# Firewall's own LAN IP is 10.10.0.1 to match the DNS proxy in
+# rules.yaml's `allow-dns-out`.
+
+flush ruleset
+
+table inet thurward {
+
+    # Named set: the LAN client subnet from `examples/rules.yaml`.
+    set lan_clients {
+        type ipv4_addr
+        flags interval
+        elements = { 10.10.0.0/24 }
+    }
+
+    chain forward {
+        type filter hook forward priority 0; policy drop;   # default-deny
+
+        # allow-dns-out: LAN can reach the DNS proxy on the firewall
+        # (the firewall handles DNS itself, so this is technically an
+        # input rule for thurward; on nftables forward chain we drop it
+        # because the firewall itself is not the DNAT target in this
+        # Tier-0 setup. Kept here for parity intent; the corresponding
+        # input chain below handles the actual reach.)
+
+        # allow-github-https: LAN to TCP/443. The FQDN restriction is
+        # intentionally elided in Tier 0 (no sidecar resolver yet).
+        ip saddr @lan_clients tcp dport 443 ct state new,established accept
+
+        # allow-established: any returning traffic.
+        ct state established,related accept
+
+        # Explicit drop counter so we can see what default-deny hit.
+        counter comment "default-deny"
+    }
+
+    chain input {
+        type filter hook input priority 0; policy drop;
+
+        # DNS to the firewall (matches `allow-dns-out` in rules.yaml).
+        ip saddr @lan_clients iifname "ens3" udp dport 53 accept
+        ip saddr @lan_clients iifname "ens3" tcp dport 53 accept
+
+        # SSH from LAN — harness access only; never on a real deployment.
+        ip saddr @lan_clients iifname "ens3" tcp dport 22 accept
+
+        # ICMP echo for the smoke test.
+        iifname "ens3" icmp type echo-request accept
+        iifname "ens3" icmpv6 type echo-request accept
+
+        ct state established,related accept
+        counter comment "default-deny-input"
+    }
+
+    chain output {
+        type filter hook output priority 0; policy accept;
+    }
+
+    # NAT lives in its own table to match thurward's separation of
+    # filter and NAT rules.
+}
+
+table ip nat {
+    chain prerouting {
+        type nat hook prerouting priority -100; policy accept;
+
+        # DNAT: 203.0.113.10:443/tcp -> 10.10.0.5:443/tcp
+        # Matches the worked DNAT in examples/rules.yaml:23-28.
+        iifname "ens4" tcp dport 443 ip daddr 203.0.113.10 \
+            dnat to 10.10.0.5:443
+    }
+
+    chain postrouting {
+        type nat hook postrouting priority 100; policy accept;
+
+        # SNAT/masquerade: 10.10.0.0/24 -> WAN interface IP.
+        # Matches the worked SNAT in examples/rules.yaml:18-22.
+        oifname "ens4" ip saddr 10.10.0.0/24 masquerade
+    }
+}

@@ -1,0 +1,17 @@
+<!--
+LAN-side bridge for the bench harness. Hosts the "client" side of the
+firewall under test. No external NAT, no DHCP — all addresses are
+static, assigned by cloud-init.
+
+See bench/README.md for the broader topology overview.
+-->
+<network>
+  <name>lan-thurward</name>
+  <forward mode='none'/>
+  <bridge name='thur-lan0' stp='off' delay='0'/>
+  <ip address='10.10.0.1' netmask='255.255.255.0'>
+    <!-- No <dhcp> block on purpose: every guest has a static IP via
+         cloud-init. DHCP on the same wire would race the static
+         assignment and re-key conntrack at boot. -->
+  </ip>
+</network>

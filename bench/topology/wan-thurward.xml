@@ -1,0 +1,16 @@
+<!--
+WAN-side bridge for the bench harness. Hosts the "server" side of the
+firewall under test. Address space uses the TEST-NET-3 reserved
+prefix 203.0.113.0/24 to avoid collision with any real network and to
+match the DNAT examples in examples/rules.yaml.
+
+No external NAT, no DHCP — every guest has a static IP via cloud-init.
+-->
+<network>
+  <name>wan-thurward</name>
+  <forward mode='none'/>
+  <bridge name='thur-wan0' stp='off' delay='0'/>
+  <ip address='203.0.113.1' netmask='255.255.255.0'>
+    <!-- No <dhcp> block — see lan-thurward.xml for rationale. -->
+  </ip>
+</network>

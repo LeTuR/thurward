@@ -17,3 +17,10 @@ node_modules/
 .env
 .env.*
 !.env.example
+
+# Bench harness artifacts (also gitignored locally under bench/.gitignore;
+# duplicated here so a bare `git status` from the repo root behaves).
+bench/images/
+bench/keys/
+bench/results/smoke/
+bench/results/b-*/

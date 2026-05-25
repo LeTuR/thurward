@@ -59,5 +59,10 @@
   // Tables in tests/benchmarks.md §9 are intentionally varied (some
   // columns are pre-filled, some are TBD) and don't fit a single column
   // alignment style.
-  "MD060": false
+  "MD060": false,
+
+  // bench/ROADMAP.md uses bold labels ("**Substrate**", "**What it
+  // can measure**") as inline section markers under each Tier heading
+  // — deliberate stylistic choice, not actual sub-headings.
+  "MD036": false
 }

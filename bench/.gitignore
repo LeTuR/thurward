@@ -1,0 +1,13 @@
+# Downloaded base images and per-VM clones.
+images/
+
+# Generated harness SSH keys. Never commit private keys.
+keys/
+
+# Per-run smoke and B-NN outputs — only the SCHEMA stays in git.
+results/smoke/
+results/b-*/
+
+# Editor / OS detritus inside bench/
+*.bak
+*.tmp
