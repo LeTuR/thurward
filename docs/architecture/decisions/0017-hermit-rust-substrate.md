@@ -1,10 +1,15 @@
 # ADR 0017 — Hermit unikernel + Rust + smoltcp wire layer
 
-**Status:** Accepted
+**Status:** Accepted (with open implementation question — see
+[ADR 0018](0018-hermit-raw-nic-access.md))
 **Date:** 2026-05-25
 **Deciders:** magicletur
 **Supersedes:** [ADR 0001](0001-unikraft-as-os-substrate.md) (substrate),
 [ADR 0002](0002-zig-as-application-language.md) (language)
+**See also:** [ADR 0018](0018-hermit-raw-nic-access.md) — phase-1 found
+that upstream `hermit-os/kernel` does not expose a public raw-frame API;
+ADR 0018 settles the strategy (fork vs alternatives) without changing the
+substrate choice itself.
 
 ## Context
 
