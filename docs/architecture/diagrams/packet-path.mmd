@@ -1,13 +1,14 @@
 %% Canonical source for the packet-path diagram.
 %% Embedded inline in docs/architecture/02-packet-path.md.
 %% Reflects the Rust fast-path on smoltcp::wire (ADR 0013 + ADR 0017)
-%% running on Hermit, and the conntrack + NAT pipeline (ADR 0014).
+%% running on Unikraft via lib-uknetdev (ADR 0018), and the
+%% conntrack + NAT pipeline (ADR 0014).
 %% The lwIP-based predecessor is archived under
 %% _sources/old/packet-path.lwip.mmd.
 sequenceDiagram
     autonumber
     participant NIC0 as virtio-net (LAN)
-    participant POLL as Hermit RX poll
+    participant POLL as uknetdev RX poll
     participant PARSE as Rust parse (smoltcp::wire)
     participant CT as conntrack
     participant FILT as filter

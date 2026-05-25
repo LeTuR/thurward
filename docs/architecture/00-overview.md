@@ -5,7 +5,7 @@ the [decision records](decisions/) in order; then the topical chapters.*
 
 ## What thurward is
 
-A minimalistic open-source firewall packaged as a Hermit unikernel
+A minimalistic open-source firewall packaged as a Unikraft unikernel
 written in Rust. It sits **inline between two networks**, filters
 traffic on **source CIDR, destination port, and FQDN**, performs
 **SNAT/masquerade and static DNAT**, and is configured by editing
@@ -16,14 +16,16 @@ collector — no in-band telemetry traffic. v1 is **single-VM**; HA
 and bare-metal direct boot are both deferred to v2.
 
 It is **not** a Linux firewall with extra steps. The OS substrate is
-[Hermit](https://hermit-os.org/); the entire data path (parser,
-conntrack, filter, NAT, TX) is Rust, using `smoltcp::wire` for typed
-packet parsing and writing every other layer ourselves — no in-image
-TCP/IP socket layer between the driver and the filter. The image is
-a single signed unikernel that boots in milliseconds and exposes no
-shell, no mgmt port, no userspace utilities. See
-[ADR 0017](decisions/0017-hermit-rust-substrate.md) and
-[ADR 0013](decisions/0013-zig-fast-path-on-uknetdev.md).
+[Unikraft](https://unikraft.org/) (via `lib-uknetdev` for raw frame
+access); the entire data path (parser, conntrack, filter, NAT, TX)
+is Rust, using `smoltcp::wire` for typed packet parsing and writing
+every other layer ourselves — no in-image TCP/IP socket layer
+between the driver and the filter. The image is a single signed
+unikernel that boots in milliseconds and exposes no shell, no mgmt
+port, no userspace utilities. See
+[ADR 0018](decisions/0018-substrate-pivot-unikraft.md) (substrate),
+[ADR 0017](decisions/0017-hermit-rust-substrate.md) (language +
+parser), and [ADR 0013](decisions/0013-zig-fast-path-on-uknetdev.md).
 
 ## Why
 
@@ -104,9 +106,9 @@ LAN clients
 │  │   ├─ DNS proxy + fqdn_set                │    │
 │  │   └─ observability emitter (vsock)       │    │
 │  ├──────────────────────────────────────────┤    │
-│  │  Hermit virtio-net + virtio-vsock        │    │
+│  │  Unikraft lib-uknetdev + virtio-vsock    │    │
 │  ├──────────────────────────────────────────┤    │
-│  │  Hermit unikernel core                   │    │
+│  │  Unikraft unikernel core                 │    │
 │  └──────────────────────────────────────────┘    │
 └────────┬──────────────────────────┬──────────────┘
          │ NIC 0 (LAN)              │ NIC 1 (WAN)
@@ -119,9 +121,10 @@ LAN clients
 
 Note: there is no TCP/IP socket layer in the image. `smoltcp` is
 linked only for its `wire` / parser modules; the Rust data plane
-owns the forwarding loop directly
+owns the forwarding loop directly via Unikraft's `lib-uknetdev`
 ([ADR 0013](decisions/0013-zig-fast-path-on-uknetdev.md),
-[ADR 0017](decisions/0017-hermit-rust-substrate.md)).
+[ADR 0017](decisions/0017-hermit-rust-substrate.md),
+[ADR 0018](decisions/0018-substrate-pivot-unikraft.md)).
 
 (System context, packet path, deployment topology, and the rule/IaC
 flow are documented in chapters 01, 02, 06, and 10 respectively, with
@@ -132,9 +135,10 @@ proper diagrams.)
 - **Unikernel** — a single-purpose operating system image where the
   application and the kernel libraries are linked into one binary.
   Boots on a hypervisor; no shell, no users, no multi-process model.
-- **Hermit** — a Rust-native unikernel framework. Application runs in
-  kernel space; `cargo build --target x86_64-unknown-hermit` produces
-  the image.
+- **Unikraft** — a modular unikernel framework. Application runs in
+  kernel space; the build (`Kraftfile` + `lib-rust` + selected
+  `lib-*` components) produces a single image. Per
+  [ADR 0018](decisions/0018-substrate-pivot-unikraft.md).
 - **smoltcp** — a `no_std` Rust TCP/IP stack. thurward links only its
   `wire` (parser/builder) modules — not its socket or interface layers
   — so the application keeps direct control over the forwarding loop.

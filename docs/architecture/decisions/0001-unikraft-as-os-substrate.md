@@ -1,17 +1,25 @@
-# ADR 0001 — Unikraft as OS substrate (superseded)
+# ADR 0001 — Unikraft as OS substrate
 
-**Status:** Superseded by [ADR 0017](0017-hermit-rust-substrate.md)
+**Status:** Accepted (substrate clause restored by
+[ADR 0018](0018-substrate-pivot-unikraft.md); language clause
+superseded by [ADR 0017](0017-hermit-rust-substrate.md) — original
+Zig choice replaced with Rust)
 **Date:** 2026-05-23
-**Superseded:** 2026-05-25
+**Superseded:** 2026-05-25 (substrate clause originally) —
+2026-05-25 (substrate clause restored)
 **Deciders:** magicletur
 
-> **Superseded.** thurward does not ship on Unikraft. The substrate
-> chosen for v1 is **Hermit** — see
-> [ADR 0017](0017-hermit-rust-substrate.md). This ADR is preserved
-> because the *non*-Unikraft alternatives analysis below (why not
-> stripped Linux, why not Alpine + Rust, etc.) still applies and is
-> referenced by ADR 0017 as the canonical "why a unikernel at all"
-> argument.
+> **Substrate clause restored.** thurward ships on **Unikraft** for
+> v1, with Rust as the application language (per
+> [ADR 0017](0017-hermit-rust-substrate.md)'s language clause) and
+> `lib-uknetdev` for raw frame access (per
+> [ADR 0018](0018-substrate-pivot-unikraft.md)). The original
+> language clause of this ADR (Zig) is superseded by ADR 0017; the
+> substrate clause was briefly superseded by ADR 0017 and restored
+> by ADR 0018 after phase-1 implementation found Hermit was the
+> wrong substrate shape for a forwarding device. The original
+> alternatives analysis below (why not stripped Linux, why not
+> Alpine + Rust, etc.) still applies.
 
 ## What survives from this ADR
 

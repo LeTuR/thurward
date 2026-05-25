@@ -99,7 +99,7 @@ Cargo `build.rs` script compiles `rules.yaml` into a packed Rust
 ```mermaid
 flowchart LR
     A[rules.yaml] -->|build.rs| B[OUT_DIR/rules_table.rs]
-    B --> C[cargo build --target x86_64-unknown-hermit]
+    B --> C[Unikraft build with lib-rust]
     C --> F[thurward image]
     G[schemas/rules.schema.json] -.validates.-> A
     style A fill:#dae8fc,stroke:#6c8ebf

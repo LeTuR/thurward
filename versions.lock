@@ -2,20 +2,38 @@
 #
 # Companion to Cargo.lock. Cargo.lock pins Rust crate versions for the
 # host-build pipeline; this file pins the bits Cargo doesn't track:
-# the Rust toolchain channel, the Hermit kernel revision, smoltcp version,
-# and any external image-build tools. Both are committed to git per
-# ADR 0010 (supply-chain hardening).
+# the Rust toolchain channel, the Unikraft kernel + lib-* revisions,
+# the smoltcp crate version, and any external image-build tools. Both
+# are committed to git per ADR 0010 (supply-chain hardening).
 
 # Rust toolchain — see rust-toolchain.toml.
 rust_channel = "stable"
 # Locked to ≥ 1.85 (edition 2024 stabilised). Bumping is a deliberate
-# PR with a regenerated Cargo.lock.
+# PR with a regenerated Cargo.lock. PR B switches to a pinned nightly
+# when lib-rust requires it.
 
-# Hermit substrate — added in PR B.
-hermit_revision = "TBD-pr-B"
-hermit_rust_target = "x86_64-unknown-hermit"
+# Unikraft substrate — added in PR B per ADR 0018.
+unikraft_revision = "TBD-pr-B"
+# Selected lib-* components (NOT the full Unikraft catalog). Per
+# ADR 0018: lib-uknetdev for raw frame access, lib-ukboot for boot,
+# lib-ukalloc for the heap, lib-uksched for cooperative threads,
+# lib-ukbus-virtio for the PCI bus driver, lib-rust for the Rust
+# application integration. Explicitly NOT linked: lib-lwip, lib-musl
+# socket layer (we own the network stack per ADR 0013).
+unikraft_libs = [
+    "lib-uknetdev",
+    "lib-ukboot",
+    "lib-ukalloc",
+    "lib-uksched",
+    "lib-ukbus-virtio",
+    "lib-rust",
+]
+# Each lib-* gets its own revision pin once PR B lands the first
+# build that exercises them. Placeholder until then.
+unikraft_lib_revisions = "TBD-pr-B"
 
-# smoltcp — added in PR C. wire-only usage per ADR 0017.
+# smoltcp — added in PR C. wire-only usage per ADR 0017 (parser
+# clause), substrate-independent per ADR 0018.
 smoltcp_version = "TBD-pr-C"
 smoltcp_features = "wire"
 

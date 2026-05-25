@@ -1,10 +1,18 @@
 # ADR 0017 — Hermit unikernel + Rust + smoltcp wire layer
 
-**Status:** Accepted
+**Status:** Accepted (substrate clause superseded by
+[ADR 0018](0018-substrate-pivot-unikraft.md); language clause and
+smoltcp::wire clause stay live)
 **Date:** 2026-05-25
 **Deciders:** magicletur
-**Supersedes:** [ADR 0001](0001-unikraft-as-os-substrate.md) (substrate),
+**Supersedes:** [ADR 0001](0001-unikraft-as-os-substrate.md) (language clause only — substrate clause restored by [ADR 0018](0018-substrate-pivot-unikraft.md)),
 [ADR 0002](0002-zig-as-application-language.md) (language)
+**Partially superseded by:** [ADR 0018](0018-substrate-pivot-unikraft.md)
+(the Hermit substrate clause is replaced with Unikraft;
+phase-1 implementation found that upstream `hermit-os/kernel`
+does not expose a public raw-frame API, which is incompatible
+with the app-owns-the-data-plane stance — see ADR 0018 for
+the rationale)
 
 ## Context
 

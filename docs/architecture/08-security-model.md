@@ -58,10 +58,12 @@ In words:
 2. **CI build environment** is pinned (Nix flake or container SHA).
    Network-isolated; deps fetched against a content-addressed proxy.
 3. **Build inputs** (Rust toolchain channel + components, every
-   transitive crate in `Cargo.lock`, the Hermit framework revision,
-   the smoltcp crate version) are pinned in `versions.lock`. CI
-   fails on drift. See
-   [ADR 0017](decisions/0017-hermit-rust-substrate.md) and
+   transitive crate in `Cargo.lock`, the Unikraft revision plus each
+   selected `lib-*` component revision, the smoltcp crate version)
+   are pinned in `versions.lock`. CI fails on drift. See
+   [ADR 0018](decisions/0018-substrate-pivot-unikraft.md) (substrate),
+   [ADR 0017](decisions/0017-hermit-rust-substrate.md) (language +
+   parser), and
    [ADR 0010](decisions/0010-supply-chain-hardening.md).
 4. **Build output** is reproducible — byte-identical given the same
    inputs.
