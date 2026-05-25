@@ -50,5 +50,8 @@ Don't. Use the private process in
 
 ## License
 
-By contributing, you agree your contributions are licensed under the
-MIT License (see [`LICENSE`](LICENSE)).
+The project license is **TBD** during the architecture phase (see
+[`LICENSE`](LICENSE) — likely Apache-2.0 or BSD-2-Clause before the
+first implementation commit). By contributing, you agree your
+contributions will be licensed under the project's chosen license once
+selected.
