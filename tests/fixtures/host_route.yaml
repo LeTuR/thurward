@@ -1,0 +1,8 @@
+# Exercises the /32 host route case (no slash in YAML).
+rules:
+  - id: allow-management
+    action: accept
+    direction: ingress
+    source: 198.51.100.42
+    destination_port: 22
+    protocol: tcp

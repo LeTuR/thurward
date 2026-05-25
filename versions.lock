@@ -1,0 +1,24 @@
+# versions.lock — pinned versions of substrate dependencies.
+#
+# Companion to Cargo.lock. Cargo.lock pins Rust crate versions for the
+# host-build pipeline; this file pins the bits Cargo doesn't track:
+# the Rust toolchain channel, the Hermit kernel revision, smoltcp version,
+# and any external image-build tools. Both are committed to git per
+# ADR 0010 (supply-chain hardening).
+
+# Rust toolchain — see rust-toolchain.toml.
+rust_channel = "stable"
+# Locked to ≥ 1.85 (edition 2024 stabilised). Bumping is a deliberate
+# PR with a regenerated Cargo.lock.
+
+# Hermit substrate — added in PR B.
+hermit_revision = "TBD-pr-B"
+hermit_rust_target = "x86_64-unknown-hermit"
+
+# smoltcp — added in PR C. wire-only usage per ADR 0017.
+smoltcp_version = "TBD-pr-C"
+smoltcp_features = "wire"
+
+# Image / packaging tools — added in PR B.
+qemu_min_version = "TBD-pr-B"
+libvirt_min_version = "TBD-pr-B"

@@ -1,0 +1,8 @@
+# Exercises the lo-hi destination_port range form.
+rules:
+  - id: allow-high-ports
+    action: accept
+    direction: egress
+    source: 10.0.0.0/24
+    destination_port: "1024-65535"
+    protocol: tcp
