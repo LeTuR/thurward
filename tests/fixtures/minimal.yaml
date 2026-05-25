@@ -1,0 +1,4 @@
+# Minimal valid input: one accept rule, no defaults overrides, no NAT.
+rules:
+  - id: allow-anything
+    action: accept

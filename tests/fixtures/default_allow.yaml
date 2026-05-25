@@ -1,0 +1,7 @@
+# Exercises a non-default default action ("accept"). Atypical but legal.
+defaults:
+  default_action: accept
+rules:
+  - id: deny-bad-actor
+    action: deny
+    source: 192.0.2.0/24

@@ -1,0 +1,47 @@
+[package]
+name = "thurward"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.85"
+description = "minimalistic unikernel firewall with FQDN filtering and first-class observability"
+license = "TBD"
+publish = false
+
+[lib]
+# The compile-time rule pipeline lives here so build.rs and integration tests
+# can share definitions. PRs B/C add a separate dataplane module for the
+# Hermit runtime.
+path = "src/lib.rs"
+
+# Single bin target; PR A only needs `cargo test` to be green, the bin compiles
+# trivially against the host. PR B switches to the x86_64-unknown-hermit target.
+[[bin]]
+name = "thurward"
+path = "src/main.rs"
+
+# Runtime deps. Kept lean for PR A — smoltcp arrives in PR C with the dataplane.
+[dependencies]
+# serde + serde_yml: YAML deserialization for examples/rules.yaml.
+# serde_yml is an actively-maintained fork; the original serde_yaml is in
+# read-only maintenance and we want a maintained dep for the build pipeline.
+serde = { version = "1", features = ["derive"] }
+serde_yml = "0.0.12"
+
+# Build-script-only deps. Same crates as runtime here; the split exists for
+# when PR C/D add runtime-only deps (smoltcp etc.) that build.rs doesn't need.
+[build-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_yml = "0.0.12"
+
+[dev-dependencies]
+# Integration tests stay on the host toolchain.
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+panic = "abort"

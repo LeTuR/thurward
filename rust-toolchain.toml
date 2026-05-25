@@ -1,0 +1,11 @@
+# Toolchain pin for the host-build pipeline.
+#
+# PR A targets stable: the rule compiler + build.rs run on host and only
+# need edition 2024 (stabilised in 1.85).
+#
+# PR B switches this to nightly when it adds the x86_64-unknown-hermit target
+# (Hermit currently requires nightly features). At that point this file is
+# updated and `versions.lock` records the nightly date.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
