@@ -1,0 +1,17 @@
+# thurward code owners
+# Reviewed by GitHub when a PR touches a matching path.
+# Reference: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+* @LeTuR
+
+# Architecture chapters and ADRs change behaviour by definition.
+/docs/architecture/ @LeTuR
+
+# Rule schema is the public contract between operators and the firewall.
+/schemas/                          @LeTuR
+/examples/rules.yaml               @LeTuR
+
+# CI / supply-chain — never let these change without an explicit review.
+/.github/workflows/                @LeTuR
+/renovate.json                     @LeTuR
+/SECURITY.md                       @LeTuR

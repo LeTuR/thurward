@@ -1,0 +1,63 @@
+{
+  // markdownlint config tuned for thurward's architecture docs.
+  // Reference: https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+  "default": true,
+
+  // Chapter docs use mermaid diagrams inside fenced HTML/HTML-like blocks.
+  "MD033": false,
+
+  // Long lines are common in tables and inline code references; we rely
+  // on prose-style soft wraps and don't enforce a hard column limit.
+  "MD013": false,
+
+  // Allow duplicate headings in sibling sections (e.g. "Reference:" /
+  // "Given:" repeated across every scenario in tests/scenarios.md).
+  "MD024": { "siblings_only": true },
+
+  // Bare URLs are fine in citations and reference lists.
+  "MD034": false,
+
+  // First line need not be a top-level heading (some embedded snippets
+  // are partial documents).
+  "MD041": false,
+
+  // Trailing punctuation in headings is sometimes intentional (e.g. "5.5").
+  "MD026": false,
+
+  // tests/scenarios.md and tests/benchmarks.md use a compact card format
+  // where a scenario's metadata (Reference / Given / When / Then) sits
+  // directly under the heading with no blank line. The lack of blank
+  // line is intentional and gives the scanning rhythm of the file.
+  "MD022": false,
+
+  // Lists in those same scenario cards run flush against surrounding
+  // headings and fences; we don't want the blank-line padding.
+  "MD032": false,
+  "MD031": false,
+
+  // Mixed bullet styles are inevitable when quoting external sources.
+  "MD004": false,
+
+  // Nested-list indent depth in scenario "Then:" bodies is uneven by
+  // design (some have sub-bullets, some don't).
+  "MD007": false,
+
+  // Some inline code spans wrap markdown emphasis markers (e.g. quoted
+  // `*.githubusercontent.com` patterns); the emphasis warning is a
+  // false positive in those cases.
+  "MD037": false,
+  "MD038": false,
+
+  // Fenced code blocks in scenario "Given:" blocks are short snippets
+  // without a language tag and don't need one.
+  "MD040": false,
+
+  // Cross-document link fragments (e.g. to anchors in scenarios.md from
+  // benchmarks.md) can't be resolved by the linter at lint time.
+  "MD051": false,
+
+  // Tables in tests/benchmarks.md §9 are intentionally varied (some
+  // columns are pre-filled, some are TBD) and don't fit a single column
+  // alignment style.
+  "MD060": false
+}
