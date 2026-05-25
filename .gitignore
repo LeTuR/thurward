@@ -1,0 +1,19 @@
+# Editor / OS junk
+*.swp
+*.swo
+*~
+.DS_Store
+.idea/
+.vscode/
+*.tmp
+
+# Rust (forward-looking; no src/ yet)
+target/
+
+# Node tooling (CI / local validators)
+node_modules/
+
+# Local secrets / env
+.env
+.env.*
+!.env.example

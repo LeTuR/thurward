@@ -1,0 +1,12 @@
+%% Canonical source for the rule-compilation diagram.
+%% Embedded inline in docs/architecture/03-rule-model.md.
+flowchart LR
+    A[rules.yaml] -->|tools/compile_rules.zig| B[src/generated/rules_table.zig]
+    B --> C[zig build]
+    C --> D[libthurward.a]
+    D --> E[Unikraft kraft build]
+    E --> F[thurward.unikraft]
+    G[schemas/rules.schema.json] -.validates.-> A
+    style A fill:#dae8fc,stroke:#6c8ebf
+    style F fill:#d5e8d4,stroke:#82b366
+    style G fill:#fff2cc,stroke:#d6b656

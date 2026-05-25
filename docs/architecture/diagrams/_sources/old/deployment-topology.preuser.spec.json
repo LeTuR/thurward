@@ -1,0 +1,67 @@
+{
+  "page": {"width": 1500, "height": 820},
+  "zones": [
+    {"id": "Z1", "label": "Hypervisor host (Linux + KVM + vhost_vsock)",
+     "x": 180, "y": 80, "w": 1200, "h": 700, "fill": "soft_gray"},
+    {"id": "Z3", "label": "HA pair (active/passive, ADR 0015)",
+     "x": 420, "y": 140, "w": 260, "h": 440, "fill": "wireframe"},
+    {"id": "Z2", "label": "Host-side collector stack + deploy controller",
+     "x": 260, "y": 650, "w": 1080, "h": 110, "fill": "inner_gray"}
+  ],
+  "nodes": [
+    {"id": "CL", "key": "generic.pc",       "label": "LAN client",         "x": 60,   "y": 350, "w": 70,  "h": 60},
+    {"id": "BL", "key": "generic.bridge",   "label": "br-lan",             "x": 240,  "y": 350, "w": 80,  "h": 60},
+
+    {"id": "VA", "key": "generic.firewall", "label": "thurward (active)",  "x": 460,  "y": 190, "w": 180, "h": 130},
+    {"id": "VS", "key": "generic.firewall", "label": "thurward (standby)", "x": 460,  "y": 420, "w": 180, "h": 130},
+
+    {"id": "BW", "key": "generic.bridge",   "label": "br-wan",             "x": 820,  "y": 350, "w": 80,  "h": 60},
+    {"id": "UR", "key": "generic.router",   "label": "Upstream router",    "x": 1260, "y": 350, "w": 90,  "h": 60},
+
+    {"id": "DC", "key": "generic.function", "label": "Deploy controller",  "x": 290,  "y": 680, "w": 150, "h": 60},
+    {"id": "OC", "key": "generic.function", "label": "OTel Collector",     "x": 480,  "y": 680, "w": 130, "h": 60},
+    {"id": "PR", "key": "generic.monitor",  "label": "Prometheus",         "x": 640,  "y": 680, "w": 100, "h": 60},
+    {"id": "LO", "key": "generic.log_store","label": "Loki",               "x": 770,  "y": 680, "w": 70,  "h": 60},
+    {"id": "GF", "key": "generic.monitor",  "label": "Grafana",            "x": 880,  "y": 680, "w": 100, "h": 60}
+  ],
+  "edges": [
+    {"src": "CL", "dst": "BL", "label": "eth",                            "kind": "data"},
+
+    {"src": "BL", "dst": "VA", "label": "TAP0 (LAN)",                     "kind": "data",
+     "exit_x": 1, "exit_y": 0.5, "entry_x": 0, "entry_y": 0.7,
+     "waypoints": [{"x": 380, "y": 380}, {"x": 380, "y": 280}]},
+
+    {"src": "VA", "dst": "BW", "label": "TAP1 (WAN)",                     "kind": "data",
+     "exit_x": 1, "exit_y": 0.7, "entry_x": 0, "entry_y": 0.5,
+     "waypoints": [{"x": 720, "y": 280}, {"x": 720, "y": 380}]},
+
+    {"src": "BL", "dst": "VS", "label": "TAP0",                           "kind": "data",
+     "exit_x": 1, "exit_y": 0.5, "entry_x": 0, "entry_y": 0.3,
+     "waypoints": [{"x": 380, "y": 380}, {"x": 380, "y": 480}]},
+
+    {"src": "VS", "dst": "BW", "label": "TAP1",                           "kind": "data",
+     "exit_x": 1, "exit_y": 0.3, "entry_x": 0, "entry_y": 0.5,
+     "waypoints": [{"x": 760, "y": 480}, {"x": 760, "y": 380}]},
+
+    {"src": "BW", "dst": "UR", "label": "",                               "kind": "data"},
+
+    {"src": "VA", "dst": "VS", "label": "vsock :9001 HA state sync",      "kind": "peering",
+     "exit_x": 0.5, "exit_y": 1, "entry_x": 0.5, "entry_y": 0},
+
+    {"src": "VA", "dst": "OC", "label": "vsock :9000 obs",                "kind": "control",
+     "exit_x": 1, "exit_y": 0.95, "entry_x": 0.5, "entry_y": 0,
+     "waypoints": [{"x": 700, "y": 615}, {"x": 545, "y": 615}]},
+
+    {"src": "DC", "dst": "VA", "label": "heartbeat / failover",           "kind": "control",
+     "exit_x": 0.1, "exit_y": 0, "entry_x": 0.05, "entry_y": 1,
+     "waypoints": [{"x": 205, "y": 600}, {"x": 205, "y": 110}, {"x": 469, "y": 110}]},
+
+    {"src": "DC", "dst": "VS", "label": "",                               "kind": "control",
+     "exit_x": 0.15, "exit_y": 0, "entry_x": 0.05, "entry_y": 1,
+     "waypoints": [{"x": 215, "y": 600}, {"x": 215, "y": 595}, {"x": 469, "y": 595}]},
+
+    {"src": "OC", "dst": "PR", "label": "",                               "kind": "control"},
+    {"src": "OC", "dst": "LO", "label": "",                               "kind": "control"},
+    {"src": "OC", "dst": "GF", "label": "",                               "kind": "control"}
+  ]
+}

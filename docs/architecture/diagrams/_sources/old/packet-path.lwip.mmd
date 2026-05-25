@@ -1,0 +1,30 @@
+%% Canonical source for the packet-path diagram.
+%% Embedded inline in docs/architecture/02-packet-path.md.
+sequenceDiagram
+    autonumber
+    participant NIC0 as virtio-net (LAN)
+    participant LWIP as lib-lwip
+    participant SHIM as netif_input shim
+    participant FILT as Zig filter
+    participant FWD as lwIP IP-forward
+    participant NIC1 as virtio-net (WAN)
+    participant OBS as observability (vsock)
+
+    NIC0->>LWIP: pbuf in (eth frame)
+    LWIP->>SHIM: netif->input(pbuf, netif)
+    SHIM->>FILT: filter_packet(pbuf, src_iface)
+    FILT->>FILT: parse 5-tuple
+    FILT->>FILT: match against rule_table[]
+    alt FQDN rule
+        FILT->>FILT: check fqdn_set for dst_ip
+    end
+    alt accept
+        FILT-->>SHIM: ACCEPT
+        SHIM->>FWD: ip4_input(pbuf, netif)
+        FWD->>NIC1: ip4_output (forwarded)
+        FILT->>OBS: optional flow span (first pkt)
+    else drop
+        FILT-->>SHIM: DROP
+        SHIM->>SHIM: pbuf_free(pbuf)
+        FILT->>OBS: ECS drop event
+    end

@@ -1,0 +1,196 @@
+# 10 — IaC (Infrastructure as Code)
+
+*Audience: anyone wiring thurward into a Terraform / Pulumi / Ansible
+pipeline.*
+
+The IaC story sits on four decisions:
+
+- [ADR 0005](decisions/0005-build-time-rule-compilation.md) — rules
+  compile into the image; IaC produces source, not running state.
+- [ADR 0009](decisions/0009-gitops-rule-control-plane.md) — git is
+  the control plane; the firewall has no runtime admin API.
+- [ADR 0010](decisions/0010-supply-chain-hardening.md) — every image
+  along the IaC path is reproducibly built, signed, and attested.
+- [ADR 0011](decisions/0011-schema-first-iac-no-custom-provider.md) —
+  the JSON Schema *is* the IaC API.
+- [ADR 0012](decisions/0012-reference-terraform-modules.md) — two
+  reference modules (rules, infra) demonstrate the contract; we don't
+  ship a custom provider.
+
+## The contract: `rules.yaml` JSON Schema
+
+thurward's public IaC API is a single file: **`schemas/rules.schema.json`**.
+That schema defines what a valid `rules.yaml` looks like. Anything that
+can render YAML can configure thurward:
+
+- Terraform with `local_file` + `templatefile`
+- Pulumi `Output<string>` → file
+- Ansible templating
+- Helm `helm template` → ConfigMap
+- A plain `cat > rules.yaml` from a CI script
+- A future `terraform-provider-thurward` from the community
+
+This decision is captured in [ADR 0011](decisions/0011-schema-first-iac-no-custom-provider.md).
+This project does **not** ship a custom Terraform provider; the schema
+is the API.
+
+## The rule-change pipeline
+
+![IaC pipeline](diagrams/iac-pipeline.svg)
+
+End-to-end, a rule change flows:
+
+```
+1. operator edits *.tf / *.yaml in their IaC repo
+2. `terraform apply` (or equivalent) renders rules.yaml in the rules-repo working copy
+3. signed commit + push to a PR branch
+4. PR review (multi-party, branch protection enforces N reviewers)
+5. PR merged to protected main
+6. CI:
+   a. validate rendered rules.yaml against schemas/rules.schema.json
+   b. reproducible build with pinned deps (ADR 0010)
+   c. cosign sign image; attach SLSA-3 provenance
+   d. push image + signatures to the registry
+7. deploy controller polls registry, sees new image
+8. controller verifies cosign signature + SLSA provenance
+9. controller starts new thurward VM (blue/green) — see 06-deployment.md
+10. controller migrates 10.0.0.1 to new VM (gratuitous ARP)
+11. controller waits the drain window, stops the old VM
+```
+
+End-to-end latency: order of seconds (the CI build dominates).
+
+## Reference Terraform modules
+
+These are *documented*, not yet *implemented* — they live in the
+implementation phase.
+
+### `terraform-thurward-rules`
+
+Wraps the GitOps rule workflow.
+
+```hcl
+module "thurward_rules" {
+  source  = "github.com/magicletur/terraform-thurward-rules"
+  version = "~> 0.1"
+
+  rules_repo = "magicletur/thurward-rules-prod"
+  rules_branch_prefix = "tf-apply-"
+
+  defaults = {
+    default_action = "deny"
+    upstream_dns   = "1.1.1.1"
+  }
+
+  nat_snat = [
+    {
+      out_interface = "wan0"
+      source        = "10.0.0.0/24"
+      masquerade    = true
+    },
+  ]
+
+  nat_dnat = [
+    {
+      wan_ip   = "203.0.113.10"
+      wan_port = 443
+      to       = "10.0.0.5:443"
+      proto    = "tcp"
+    },
+  ]
+
+  rules = [
+    {
+      id                  = "allow-dns-out"
+      action              = "accept"
+      direction           = "egress"
+      source              = "10.0.0.0/24"
+      destination         = "10.0.0.1"
+      destination_port    = 53
+      protocol            = "udp"
+    },
+    {
+      id                  = "allow-github-https"
+      action              = "accept"
+      direction           = "egress"
+      source              = "10.0.0.0/24"
+      destination_port    = 443
+      destination_fqdn    = ["github.com", "*.githubusercontent.com"]
+      protocol            = "tcp"
+    },
+  ]
+
+  deploy_wait_timeout = "5m"
+}
+```
+
+Stock providers used: `github`, `local_file`, `templatefile`,
+`null_resource`, `http`. No custom provider.
+
+### `terraform-thurward-infra`
+
+Provisions the host plumbing.
+
+```hcl
+module "thurward_infra" {
+  source  = "github.com/magicletur/terraform-thurward-infra"
+  version = "~> 0.1"
+
+  hypervisor = "firecracker"
+  lan_cidr   = "10.0.0.0/24"
+  wan_gateway = "192.168.1.1"
+
+  vsock_cid = 3
+
+  collector = {
+    enabled = true
+    grafana_admin_password = var.grafana_admin_password
+    persist_path = "/var/lib/thurward-collector"
+  }
+}
+```
+
+Provisions: `br-lan` and `br-wan` Linux bridges, TAP devices (one
+LAN + one WAN per VM in the HA pair, four total), both unikernel VMs
+in the active/passive pair ([ADR 0015](decisions/0015-active-passive-ha.md))
+each with two virtio NICs + virtio-vsock (CIDs 3 and 4), and the
+host-side OTel Collector + Prometheus + Loki + Tempo + Grafana stack
+via `docker-compose`.
+
+Stock providers: `libvirt`, `docker`, `null_resource`, `local_file`.
+
+## Schema-first means non-Terraform tools work too
+
+A Pulumi user can do the same thing with one file:
+
+```python
+import pulumi
+import yaml
+from pulumi_command import local
+
+rules = {
+    "defaults": {"default_action": "deny", "upstream_dns": "1.1.1.1"},
+    "rules": [
+        {"id": "allow-dns-out", "action": "accept", ...},
+    ],
+}
+
+local.Command("write-rules-yaml",
+    create=f"cat > rules.yaml <<'EOF'\n{yaml.dump(rules)}\nEOF")
+```
+
+… then commit, push, and rely on the same CI + deploy controller as
+the Terraform path. Same contract.
+
+## What if the community wants a real Terraform provider?
+
+We welcome it. The schema is the API; a provider should:
+
+- Generate a `thurward_rule` resource type from the JSON Schema.
+- Compose rules into the file format thurward expects.
+- Either commit-and-push to the rules repo (mirroring
+  `terraform-thurward-rules`) or call an upstream "rules service" if
+  someone builds one.
+
+We're not going to build it ourselves; we'd rather keep the surface
+small and the schema authoritative.

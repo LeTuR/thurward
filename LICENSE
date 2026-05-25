@@ -1,0 +1,8 @@
+License: TBD
+
+This project is in its architecture phase. A license will be chosen before
+the first implementation commit. Likely candidates: Apache-2.0 (permissive,
+patent grant) or BSD-2-Clause (minimal, no patent terms).
+
+Until then, all rights reserved by the original author. The architecture
+documentation in this repository may be read and discussed freely.

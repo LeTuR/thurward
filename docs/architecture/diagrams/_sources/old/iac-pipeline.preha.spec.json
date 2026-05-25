@@ -1,0 +1,24 @@
+{
+  "page": {"width": 1400, "height": 260},
+  "zones": [
+    {"id": "ZF", "label": "Rule-change flow",
+     "x": 20, "y": 60, "w": 1360, "h": 180, "fill": "wireframe"}
+  ],
+  "nodes": [
+    {"id": "DV", "key": "generic.user",         "label": "Developer",                 "x": 40,   "y": 100},
+    {"id": "IR", "key": "generic.container",    "label": "IaC repo (Terraform)",      "x": 170,  "y": 100, "w": 120, "h": 60},
+    {"id": "RR", "key": "generic.container",    "label": "Rules repo (PR + review)",  "x": 350,  "y": 100, "w": 140, "h": 60},
+    {"id": "CI", "key": "generic.function",     "label": "CI: reproducible build + cosign sign + SLSA-3", "x": 550, "y": 100, "w": 220, "h": 60},
+    {"id": "RG", "key": "generic.storage_bucket","label": "Image registry",            "x": 820,  "y": 100, "w": 100, "h": 70},
+    {"id": "DC", "key": "generic.function",     "label": "Deploy controller (verify + swap)", "x": 970, "y": 100, "w": 200, "h": 60},
+    {"id": "FW", "key": "generic.firewall",     "label": "thurward (running)",        "x": 1220, "y": 100, "w": 80,  "h": 80}
+  ],
+  "edges": [
+    {"src": "DV", "dst": "IR", "label": "edits",                  "kind": "data"},
+    {"src": "IR", "dst": "RR", "label": "tf apply → rules.yaml",  "kind": "data"},
+    {"src": "RR", "dst": "CI", "label": "merge to main",          "kind": "data"},
+    {"src": "CI", "dst": "RG", "label": "push signed image",      "kind": "data"},
+    {"src": "RG", "dst": "DC", "label": "pull",                   "kind": "data"},
+    {"src": "DC", "dst": "FW", "label": "blue/green swap",        "kind": "data"}
+  ]
+}

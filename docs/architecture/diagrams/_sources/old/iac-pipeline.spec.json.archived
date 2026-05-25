@@ -1,0 +1,30 @@
+{
+  "page": {"width": 1800, "height": 320},
+  "zones": [
+    {"id": "ZF", "label": "Rule-change flow",
+     "x": 20, "y": 60, "w": 1760, "h": 240, "fill": "wireframe"}
+  ],
+  "nodes": [
+    {"id": "DV", "key": "generic.user",         "label": "Developer",                                      "x": 60,   "y": 140, "w": 70,  "h": 70},
+    {"id": "IR", "key": "generic.container",    "label": "IaC repo\n(Terraform)",                          "x": 220,  "y": 140, "w": 140, "h": 70},
+    {"id": "RR", "key": "generic.container",    "label": "Rules repo\n(PR + review)",                      "x": 460,  "y": 140, "w": 160, "h": 70},
+    {"id": "CI", "key": "generic.function",     "label": "CI: reproducible build\n+ cosign sign + SLSA-3", "x": 720,  "y": 140, "w": 240, "h": 70},
+    {"id": "RG", "key": "generic.storage_bucket","label": "Image registry",                                "x": 1060, "y": 140, "w": 110, "h": 80},
+    {"id": "DC", "key": "generic.function",     "label": "Deploy controller\n(verify + swap)",             "x": 1260, "y": 140, "w": 210, "h": 70},
+    {"id": "FW", "key": "generic.firewall",     "label": "thurward (running)",                             "x": 1570, "y": 130, "w": 140, "h": 100}
+  ],
+  "edges": [
+    {"src": "DV", "dst": "IR", "label": "edits",                  "kind": "data",
+     "exit_x": 1, "exit_y": 0.5, "entry_x": 0, "entry_y": 0.5},
+    {"src": "IR", "dst": "RR", "label": "tf apply",               "kind": "data",
+     "exit_x": 1, "exit_y": 0.5, "entry_x": 0, "entry_y": 0.5},
+    {"src": "RR", "dst": "CI", "label": "merge",                  "kind": "data",
+     "exit_x": 1, "exit_y": 0.5, "entry_x": 0, "entry_y": 0.5},
+    {"src": "CI", "dst": "RG", "label": "push image",             "kind": "data",
+     "exit_x": 1, "exit_y": 0.5, "entry_x": 0, "entry_y": 0.5},
+    {"src": "RG", "dst": "DC", "label": "pull",                   "kind": "data",
+     "exit_x": 1, "exit_y": 0.5, "entry_x": 0, "entry_y": 0.5},
+    {"src": "DC", "dst": "FW", "label": "rolling HA swap",        "kind": "data",
+     "exit_x": 1, "exit_y": 0.5, "entry_x": 0, "entry_y": 0.5}
+  ]
+}

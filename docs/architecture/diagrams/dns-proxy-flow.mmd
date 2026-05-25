@@ -1,0 +1,18 @@
+%% Canonical source for the DNS-proxy-flow diagram.
+%% Embedded inline in docs/architecture/04-fqdn-and-dns.md.
+sequenceDiagram
+    autonumber
+    participant C as LAN client
+    participant P as thurward DNS proxy
+    participant U as upstream resolver
+    participant S as fqdn_set
+
+    C->>P: A? github.com
+    P->>U: A? github.com (forwarded)
+    U-->>P: A github.com 30 IN A 140.82.x.x ...
+    P->>S: insert (github.com → 140.82.x.x, expiry=now+30s)
+    Note over P,S: CNAME chain followed: every link<br/>recorded with final-leaf TTL
+    P-->>C: A github.com 30 IN A 140.82.x.x ... (unchanged)
+    C->>C: connect(140.82.x.x:443)
+    Note over C: client packet hits filter
+    Note over S: filter looks up 140.82.x.x →<br/>yes, currently bound to github.com<br/>→ matches allow-github-https rule

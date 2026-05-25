@@ -1,0 +1,40 @@
+{
+  "page": {"width": 1400, "height": 720},
+  "zones": [
+    {"id": "Z1", "label": "Hypervisor host (Linux + KVM + vhost_vsock)",
+     "x": 180, "y": 80, "w": 1080, "h": 580, "fill": "soft_gray"},
+    {"id": "Z2", "label": "Host-side collector stack",
+     "x": 320, "y": 510, "w": 900, "h": 130, "fill": "inner_gray"}
+  ],
+  "nodes": [
+    {"id": "CL", "key": "generic.pc",       "label": "LAN client",        "x": 60,   "y": 280, "w": 70,  "h": 60},
+    {"id": "BL", "key": "generic.bridge",   "label": "br-lan",            "x": 240,  "y": 280, "w": 100, "h": 60},
+
+    {"id": "VM", "key": "generic.firewall", "label": "thurward (v1: one VM)",            "x": 480, "y": 230, "w": 240, "h": 160},
+
+    {"id": "BW", "key": "generic.bridge",   "label": "br-wan",            "x": 820,  "y": 280, "w": 100, "h": 60},
+    {"id": "UR", "key": "generic.router",   "label": "Upstream router",   "x": 1110, "y": 280, "w": 90,  "h": 60},
+
+    {"id": "OC", "key": "generic.function", "label": "OTel Collector",    "x": 360,  "y": 545, "w": 130, "h": 60},
+    {"id": "PR", "key": "generic.monitor",  "label": "Prometheus",        "x": 520,  "y": 545, "w": 100, "h": 60},
+    {"id": "LO", "key": "generic.log_store","label": "Loki",              "x": 650,  "y": 545, "w": 70,  "h": 60},
+    {"id": "TE", "key": "generic.log_store","label": "Tempo",             "x": 750,  "y": 545, "w": 70,  "h": 60},
+    {"id": "GF", "key": "generic.monitor",  "label": "Grafana",           "x": 860,  "y": 545, "w": 100, "h": 60}
+  ],
+  "edges": [
+    {"src": "CL", "dst": "BL", "label": "eth",                                   "kind": "data"},
+    {"src": "BL", "dst": "VM", "label": "TAP / virtio-net 0",                    "kind": "data",
+     "exit_x": 1, "exit_y": 0.5, "entry_x": 0, "entry_y": 0.5},
+    {"src": "VM", "dst": "BW", "label": "TAP / virtio-net 1",                    "kind": "data",
+     "exit_x": 1, "exit_y": 0.5, "entry_x": 0, "entry_y": 0.5},
+    {"src": "BW", "dst": "UR", "label": "",                                      "kind": "data"},
+
+    {"src": "VM", "dst": "OC", "label": "vsock :9000",                           "kind": "control",
+     "exit_x": 0.3, "exit_y": 1, "entry_x": 0.5, "entry_y": 0},
+
+    {"src": "OC", "dst": "PR", "label": "", "kind": "control"},
+    {"src": "OC", "dst": "LO", "label": "", "kind": "control"},
+    {"src": "OC", "dst": "TE", "label": "", "kind": "control"},
+    {"src": "OC", "dst": "GF", "label": "", "kind": "control"}
+  ]
+}

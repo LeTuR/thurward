@@ -1,0 +1,55 @@
+# Worked example matching docs/architecture/03-rule-model.md
+# and the NAT section from ADR 0014.
+# Validated against schemas/rules.schema.json by CI.
+
+defaults:
+  default_action: deny
+  upstream_dns: 1.1.1.1
+  flow_trace_sample_accept: 0.01
+  flow_trace_sample_drop: 1.0
+  dns_qps_per_client: 100
+  conntrack_timeouts:
+    tcp_syn_sent: 30
+    tcp_established: 3600
+    tcp_time_wait: 60
+    udp_idle: 60
+    icmp_echo: 30
+
+nat:
+  snat:
+    - out_interface: wan0
+      source: 10.0.0.0/24
+      masquerade: true
+  dnat:
+    - wan_ip: 203.0.113.10
+      wan_port: 443
+      to: 10.0.0.5:443
+      proto: tcp
+      from: 0.0.0.0/0
+
+rules:
+  - id: allow-dns-out
+    name: "LAN can reach the DNS proxy"
+    action: accept
+    direction: egress
+    source: 10.0.0.0/24
+    destination: 10.0.0.1
+    destination_port: 53
+    protocol: udp
+
+  - id: allow-github-https
+    name: "Allow HTTPS to GitHub"
+    action: accept
+    direction: egress
+    source: 10.0.0.0/24
+    destination_port: 443
+    destination_fqdn:
+      - github.com
+      - "*.githubusercontent.com"
+    protocol: tcp
+
+  - id: allow-established
+    name: "Allow returning traffic on established flows"
+    action: accept
+    direction: ingress
+    state: established

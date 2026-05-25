@@ -1,0 +1,47 @@
+{
+  "page": {"width": 1400, "height": 720},
+  "zones": [
+    {"id": "Z1", "label": "Host-side observability collector",
+     "x": 60, "y": 530, "w": 1280, "h": 170, "fill": "soft_gray"}
+  ],
+  "nodes": [
+    {"id": "C1", "key": "generic.pc",       "label": "LAN client",            "x": 60,   "y": 80,  "w": 70,  "h": 60},
+    {"id": "C2", "key": "generic.pc",       "label": "LAN client",            "x": 60,   "y": 220, "w": 70,  "h": 60},
+    {"id": "C3", "key": "generic.pc",       "label": "LAN client",            "x": 60,   "y": 360, "w": 70,  "h": 60},
+
+    {"id": "FW", "key": "generic.firewall", "label": "thurward",              "x": 350,  "y": 200, "w": 160, "h": 120},
+
+    {"id": "UD", "key": "generic.dns",      "label": "Upstream DNS resolver", "x": 700,  "y": 60,  "w": 150, "h": 70},
+    {"id": "RT", "key": "generic.router",   "label": "WAN router",            "x": 740,  "y": 230, "w": 90,  "h": 60},
+    {"id": "IN", "key": "generic.internet", "label": "Internet",              "x": 1180, "y": 220, "w": 110, "h": 80},
+
+    {"id": "OC", "key": "generic.function", "label": "OTel Collector",        "x": 110,  "y": 580, "w": 150, "h": 70},
+    {"id": "PR", "key": "generic.monitor",  "label": "Prometheus",            "x": 360,  "y": 580, "w": 110, "h": 70},
+    {"id": "LO", "key": "generic.log_store","label": "Loki",                  "x": 560,  "y": 580, "w": 70,  "h": 70},
+    {"id": "TE", "key": "generic.log_store","label": "Tempo",                 "x": 720,  "y": 580, "w": 70,  "h": 70},
+    {"id": "GF", "key": "generic.monitor",  "label": "Grafana",               "x": 880,  "y": 580, "w": 110, "h": 70}
+  ],
+  "edges": [
+    {"src": "C1", "dst": "FW", "label": "IP + DNS",        "kind": "data",
+     "exit_x": 1, "exit_y": 0.5, "entry_x": 0, "entry_y": 0.2},
+    {"src": "C2", "dst": "FW", "label": "",                "kind": "data",
+     "exit_x": 1, "exit_y": 0.5, "entry_x": 0, "entry_y": 0.5},
+    {"src": "C3", "dst": "FW", "label": "",                "kind": "data",
+     "exit_x": 1, "exit_y": 0.5, "entry_x": 0, "entry_y": 0.8},
+
+    {"src": "FW", "dst": "UD", "label": "",                "kind": "data", "bidirectional": true,
+     "exit_x": 0.5, "exit_y": 0, "entry_x": 0.3, "entry_y": 1},
+
+    {"src": "FW", "dst": "RT", "label": "filtered IP",     "kind": "data",
+     "exit_x": 1, "exit_y": 0.7, "entry_x": 0, "entry_y": 0.5},
+
+    {"src": "RT", "dst": "IN", "label": "",                "kind": "data"},
+
+    {"src": "FW", "dst": "OC", "label": "vsock telemetry", "kind": "control",
+     "exit_x": 0.2, "exit_y": 1, "entry_x": 0.5, "entry_y": 0},
+
+    {"src": "OC", "dst": "PR", "label": "",                "kind": "control"},
+    {"src": "OC", "dst": "LO", "label": "",                "kind": "control"},
+    {"src": "OC", "dst": "TE", "label": "",                "kind": "control"}
+  ]
+}

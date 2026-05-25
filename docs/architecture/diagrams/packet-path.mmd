@@ -1,0 +1,40 @@
+%% Canonical source for the packet-path diagram.
+%% Embedded inline in docs/architecture/02-packet-path.md.
+%% Reflects the Rust fast-path on smoltcp::wire (ADR 0013 + ADR 0017)
+%% running on Hermit, and the conntrack + NAT pipeline (ADR 0014).
+%% The lwIP-based predecessor is archived under
+%% _sources/old/packet-path.lwip.mmd.
+sequenceDiagram
+    autonumber
+    participant NIC0 as virtio-net (LAN)
+    participant POLL as Hermit RX poll
+    participant PARSE as Rust parse (smoltcp::wire)
+    participant CT as conntrack
+    participant FILT as filter
+    participant NAT as NAT translate
+    participant TX as Rust TX
+    participant NIC1 as virtio-net (WAN)
+    participant OBS as observability (vsock)
+
+    NIC0->>POLL: RX descriptor batch (up to 64)
+    POLL->>PARSE: frame ptrs
+    PARSE->>PARSE: Ethernet / IPv4 / TCP|UDP|ICMP headers → 5-tuple
+    PARSE->>CT: lookup (pre-translation tuple)
+    alt existing flow
+        CT-->>NAT: apply reverse / forward translation from entry
+    else new flow
+        CT->>FILT: 5-tuple + direction
+        alt FQDN rule
+            FILT->>FILT: check fqdn_set for dst_ip
+        end
+        alt accept
+            FILT->>NAT: apply SNAT (egress) / DNAT (ingress)
+            NAT->>CT: install conntrack entry
+            FILT->>OBS: flow span (first pkt, sampled)
+        else drop
+            FILT-->>POLL: DROP
+            FILT->>OBS: ECS drop event
+        end
+    end
+    NAT->>TX: enqueue translated frame
+    TX->>NIC1: TX descriptor

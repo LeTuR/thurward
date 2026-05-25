@@ -1,0 +1,36 @@
+{
+  "page": {"width": 1200, "height": 600},
+  "zones": [
+    {"id": "ZB", "label": "Build-time trust",  "x": 60, "y": 80,  "w": 1080, "h": 200, "fill": "soft_gray"},
+    {"id": "ZD", "label": "Deploy-time trust", "x": 60, "y": 360, "w": 1080, "h": 180, "fill": "soft_gray"}
+  ],
+  "nodes": [
+    {"id": "CR", "key": "generic.container",    "label": "Code repo (signed commits)",  "x": 100, "y": 130, "w": 150, "h": 60},
+    {"id": "RR", "key": "generic.container",    "label": "Rules repo (signed commits)", "x": 280, "y": 130, "w": 160, "h": 60},
+    {"id": "VL", "key": "generic.blob_object",  "label": "versions.lock (pinned deps)", "x": 470, "y": 130, "w": 170, "h": 60},
+    {"id": "BE", "key": "generic.function",     "label": "CI: hermetic + reproducible", "x": 670, "y": 130, "w": 180, "h": 60},
+    {"id": "CS", "key": "generic.secret_store", "label": "cosign signature",            "x": 880, "y": 110, "w": 130, "h": 60},
+    {"id": "SP", "key": "generic.secret_store", "label": "SLSA-3 provenance",           "x": 880, "y": 200, "w": 130, "h": 60},
+    {"id": "RG", "key": "generic.storage_bucket","label": "Image registry",             "x": 1040,"y": 150, "w": 80,  "h": 70},
+
+    {"id": "DC", "key": "generic.function",     "label": "Deploy controller",           "x": 380, "y": 410, "w": 160, "h": 60},
+    {"id": "VC", "key": "generic.secret_store", "label": "verify cosign sig",           "x": 580, "y": 390, "w": 150, "h": 60},
+    {"id": "VP", "key": "generic.secret_store", "label": "verify SLSA provenance",      "x": 580, "y": 470, "w": 180, "h": 60},
+    {"id": "FW", "key": "generic.firewall",     "label": "thurward (running)",          "x": 880, "y": 410, "w": 110, "h": 80}
+  ],
+  "edges": [
+    {"src": "CR", "dst": "BE", "label": "",                "kind": "control"},
+    {"src": "RR", "dst": "BE", "label": "",                "kind": "control"},
+    {"src": "VL", "dst": "BE", "label": "",                "kind": "control"},
+    {"src": "BE", "dst": "CS", "label": "sign",            "kind": "data"},
+    {"src": "BE", "dst": "SP", "label": "attest",          "kind": "data"},
+    {"src": "CS", "dst": "RG", "label": "",                "kind": "data"},
+    {"src": "SP", "dst": "RG", "label": "",                "kind": "data"},
+
+    {"src": "RG", "dst": "DC", "label": "pull image",      "kind": "data"},
+    {"src": "DC", "dst": "VC", "label": "",                "kind": "control"},
+    {"src": "DC", "dst": "VP", "label": "",                "kind": "control"},
+    {"src": "VC", "dst": "FW", "label": "ok",              "kind": "data"},
+    {"src": "VP", "dst": "FW", "label": "ok",              "kind": "data"}
+  ]
+}

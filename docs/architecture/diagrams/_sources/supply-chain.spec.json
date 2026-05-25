@@ -1,0 +1,45 @@
+{
+  "page": {"width": 1200, "height": 600},
+  "zones": [
+    {"id": "ZB", "label": "Build-time trust",    "x": 60, "y": 80,  "w": 1080, "h": 200, "fill": "soft_gray"},
+    {"id": "ZD", "label": "Install-time trust",  "x": 60, "y": 360, "w": 1080, "h": 200, "fill": "soft_gray"}
+  ],
+  "nodes": [
+    {"id": "CR", "key": "generic.container",    "label": "Firewall repo\n(signed commits)",   "x": 100, "y": 120, "w": 170, "h": 80},
+    {"id": "VL", "key": "generic.blob_object",  "label": "versions.lock\n(pinned deps)",      "x": 310, "y": 120, "w": 170, "h": 80},
+    {"id": "BE", "key": "generic.function",     "label": "CI: hermetic\n+ reproducible",      "x": 520, "y": 130, "w": 170, "h": 60},
+    {"id": "CS", "key": "generic.secret_store", "label": "cosign signature",                  "x": 740, "y": 100, "w": 150, "h": 60},
+    {"id": "SP", "key": "generic.secret_store", "label": "SLSA-3 provenance",                 "x": 740, "y": 195, "w": 170, "h": 60},
+    {"id": "RG", "key": "generic.storage_bucket","label": "Image registry\n/ release",        "x": 980, "y": 140, "w": 130, "h": 90},
+
+    {"id": "OP", "key": "generic.user",         "label": "Operator\n(or CI runbook)",         "x": 100, "y": 430, "w": 80,  "h": 90},
+    {"id": "VC", "key": "generic.secret_store", "label": "cosign verify",                     "x": 290, "y": 400, "w": 150, "h": 60},
+    {"id": "VP", "key": "generic.secret_store", "label": "slsa-verifier\nverify-artifact",    "x": 290, "y": 480, "w": 170, "h": 60},
+    {"id": "IN", "key": "generic.function",     "label": "Install + restart\n(systemd / dd)", "x": 520, "y": 430, "w": 170, "h": 70},
+    {"id": "FW", "key": "generic.firewall",     "label": "thurward\n(running)",               "x": 800, "y": 410, "w": 130, "h": 100}
+  ],
+  "edges": [
+    {"src": "CR", "dst": "BE", "label": "",       "kind": "control"},
+    {"src": "VL", "dst": "BE", "label": "",       "kind": "control"},
+    {"src": "BE", "dst": "CS", "label": "sign",   "kind": "data",
+     "exit_x": 1, "exit_y": 0.3, "entry_x": 0, "entry_y": 0.5},
+    {"src": "BE", "dst": "SP", "label": "attest", "kind": "data",
+     "exit_x": 1, "exit_y": 0.7, "entry_x": 0, "entry_y": 0.5},
+    {"src": "CS", "dst": "RG", "label": "",       "kind": "data"},
+    {"src": "SP", "dst": "RG", "label": "",       "kind": "data"},
+
+    {"src": "RG", "dst": "OP", "label": "fetch artifact + sig + attestation", "kind": "data",
+     "exit_x": 0, "exit_y": 1, "entry_x": 1, "entry_y": 0.2,
+     "waypoints": [{"x": 60, "y": 350}]},
+
+    {"src": "OP", "dst": "VC", "label": "", "kind": "control",
+     "exit_x": 1, "exit_y": 0.3, "entry_x": 0, "entry_y": 0.5},
+    {"src": "OP", "dst": "VP", "label": "", "kind": "control",
+     "exit_x": 1, "exit_y": 0.7, "entry_x": 0, "entry_y": 0.5},
+    {"src": "VC", "dst": "IN", "label": "ok", "kind": "data",
+     "exit_x": 1, "exit_y": 0.5, "entry_x": 0, "entry_y": 0.3},
+    {"src": "VP", "dst": "IN", "label": "ok", "kind": "data",
+     "exit_x": 1, "exit_y": 0.5, "entry_x": 0, "entry_y": 0.7},
+    {"src": "IN", "dst": "FW", "label": "swap", "kind": "data"}
+  ]
+}

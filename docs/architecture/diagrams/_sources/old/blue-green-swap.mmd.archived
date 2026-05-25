@@ -1,0 +1,24 @@
+%% Canonical source for the blue-green-swap diagram.
+%% Embedded inline in docs/architecture/07-operations.md.
+sequenceDiagram
+    autonumber
+    participant Op as Operator
+    participant CI as CI pipeline
+    participant Reg as Image registry
+    participant Ctrl as Deploy controller
+    participant Old as thurward (old VM)
+    participant New as thurward (new VM)
+    participant Br as br-lan / br-wan
+
+    Op->>CI: PR merged on rules-repo
+    CI->>CI: reproducible build + tests
+    CI->>Reg: push image, cosign sign, attach SLSA-3 provenance
+    Ctrl->>Reg: pull image
+    Ctrl->>Ctrl: verify cosign sig + SLSA provenance (ADR 0010)
+    Ctrl->>New: start on br-lan / br-wan
+    New->>Br: attach to bridges
+    Ctrl->>New: confirm health (vsock metric `thurward_build_info` present)
+    Ctrl->>Br: migrate 10.0.0.1 to new VM (gratuitous ARP)
+    Note over Old,New: new flows hit New; established flows continue on Old
+    Ctrl->>Old: wait drain window (default 300s)
+    Ctrl->>Old: stop VM, detach TAPs
