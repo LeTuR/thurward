@@ -119,7 +119,7 @@ The throughput-finding algorithm is **MLRsearch** (`draft-ietf-bmwg-mlrsearch`),
 
 ### 0.11 Reporting discipline
 
-- Each benchmark cell in [§8](#8-comparison-summary) reports **median + p95 across N trials** with N ≥ 5 unless the benchmark says otherwise. N is stated once here and overridden per benchmark only when justified.
+- Each benchmark cell in [§9](#9-comparison-summary) reports **median + p95 across N trials** with N ≥ 5 unless the benchmark says otherwise. N is stated once here and overridden per benchmark only when justified.
 - **Latency** is reported as the average of **≥ 20 trials** (RFC 2544 §26.2) at the throughput rate, plus p50 / p99 / p99.9 from the trial-aggregated histogram.
 - **CPU utilisation** on the SUT is recorded per benchmark.
 - **Throughput per vCPU** (Mpps/vCPU or Gbps/vCPU) is reported as a derived efficiency column in §8 — distinguishes thurward from VPP on the metric that actually matters for a 1-vCPU edge firewall.

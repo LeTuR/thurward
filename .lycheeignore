@@ -1,0 +1,5 @@
+# External URLs that lychee should not flag. Used in tests/benchmarks.md
+# as references — the underlying pages reorganise periodically and the
+# citation context (FD.io CSIT, etc.) is what matters, not the exact
+# deep-link surviving.
+^https://docs\.fd\.io/csit/.*$
