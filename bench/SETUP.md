@@ -25,7 +25,8 @@ sudo pacman -S --needed \
     qemu-full libvirt virt-install \
     dnsmasq bridge-utils iproute2 \
     cloud-image-utils edk2-ovmf swtpm \
-    jq libguestfs iperf3
+    jq libguestfs guestfs-tools iperf3 \
+    tcpdump
 ```
 
 `qemu-full` pulls in everything; on slim setups `qemu-base` +
@@ -37,6 +38,28 @@ sudo pacman -S --needed \
 sudo systemctl enable --now libvirtd.socket
 sudo systemctl enable --now virtlogd.socket
 ```
+
+## 3a. Run qemu as your user
+
+`qemu:///system` defaults to running the qemu process as the
+`libvirt-qemu` system user — which can't traverse `/home/<you>` to read
+the bench instance disks stored under `bench/images/instances/`. Tell
+libvirt to run qemu as your user instead:
+
+```
+sudo tee -a /etc/libvirt/qemu.conf >/dev/null <<EOF
+
+# thurward-bench: run qemu as the invoking user so instance qcow2s
+# stored under /home/<user>/Repositories/.../bench/images/instances/
+# are readable by the qemu process.
+user = "$USER"
+group = "kvm"
+EOF
+sudo systemctl restart libvirtd.service
+```
+
+Without this, `make sub-up` fails with
+`error: Cannot access storage file ... (as uid:955, gid:955): Permission denied`.
 
 ## 4. User groups
 
@@ -118,4 +141,6 @@ If both bridges came up, you're ready.
 | `Could not access KVM kernel module: Permission denied`          | User not in `kvm` group, or `/dev/kvm` permissions are wrong (`ls -l /dev/kvm` should be `0660 kvm`). |
 | Wayland + libvirt graphical viewer doesn't open                  | Use `virsh console <vm>` (text) instead of `virt-viewer`. The harness doesn't need a GUI.            |
 | `network 'lan-thurward' is not active` after host reboot         | Networks are not auto-started; run `make net-up` again.                                              |
-| nftables guest can't reach package mirrors                       | Cloud-init runs *after* the firewall ruleset loads; the guest is intentionally isolated. Install packages into the cloud-image with `virt-customize` instead. |
+| nftables guest can't reach package mirrors                       | Cloud-init runs *after* the firewall ruleset loads; the guest is intentionally isolated. The Makefile pre-bakes all packages via `make base-customise` — re-run that target if you change `BASE_PACKAGES`. |
+| `error: Cannot access storage file ... (as uid:955, gid:955)`    | Run § 3a — `qemu:///system` is still running qemu as `libvirt-qemu`. Bench disks live under `/home`, which that user can't traverse. |
+| Guest boots but `localhost login:` instead of `thur-*`           | Cloud-init never read the seed. The harness injects the seed into `/var/lib/cloud/seed/nocloud/` on the instance qcow2 via `virt-customize`; if this step fails (e.g. `guestfs-tools` missing) cloud-init falls back to default state. Check `make sub-up` output. |

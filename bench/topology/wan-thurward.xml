@@ -10,7 +10,11 @@ No external NAT, no DHCP — every guest has a static IP via cloud-init.
   <name>wan-thurward</name>
   <forward mode='none'/>
   <bridge name='thur-wan0' stp='off' delay='0'/>
-  <ip address='203.0.113.1' netmask='255.255.255.0'>
+  <!-- Host-side bridge IP. The SUT owns 203.0.113.1 (gateway from the
+       WAN-side endpoint's point of view); the host parks at
+       203.0.113.254 so it can reach the wan-netns endpoint inside the
+       generator VM without colliding with the SUT's WAN address. -->
+  <ip address='203.0.113.254' netmask='255.255.255.0'>
     <!-- No <dhcp> block — see lan-thurward.xml for rationale. -->
   </ip>
 </network>

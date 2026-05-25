@@ -1,9 +1,14 @@
 #cloud-config
 # Traffic-generator VM for thurward bench harness.
 #
-# Two NICs, one on each bridge. Hosts both the "LAN client" and the
-# "WAN server" personas — that gives us a single VM with iperf3
-# endpoints on both sides of the firewall.
+# Two NICs, one on each bridge. enp1s0 stays in the root namespace as the
+# LAN client. enp2s0 is moved into the `wan` network namespace where the
+# iperf3 server lives. Without this split, both 10.10.0.100 and
+# 203.0.113.100 would be local addresses in the same netns and the kernel
+# would short-circuit any client connection to 203.0.113.100 via
+# loopback — bypassing the firewall and silently invalidating the smoke
+# numbers. With the split, the only route from root-netns to
+# 203.0.113.0/24 is via the SUT.
 #
 # Tier-0 only: iperf3 + ping. TRex lives in its own VM in a later pass.
 
@@ -23,6 +28,7 @@ write_files:
     content: |
       # No forwarding on the generator — it's a leaf.
       net.ipv4.ip_forward = 0
+      net.ipv6.conf.all.disable_ipv6 = 1
 
   - path: /etc/netplan/60-thurward-gen.yaml
     permissions: "0600"
@@ -30,38 +36,98 @@ write_files:
       network:
         version: 2
         ethernets:
-          ens3:
+          enp1s0:
             dhcp4: false
             addresses: [10.10.0.100/24]
             routes:
-              - to: 203.0.113.0/24
+              - to: default
                 via: 10.10.0.1
             optional: true
-          ens4:
+          enp2s0:
+            # enp2s0 is handed off to the `wan` netns by trafficgen-wan-ns.service.
+            # Leaving it unmanaged here keeps systemd-networkd from re-claiming it.
             dhcp4: false
-            addresses: [203.0.113.100/24]
+            dhcp6: false
             optional: true
+
+  - path: /usr/local/sbin/trafficgen-wan-ns
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      # Move enp2s0 into the `wan` netns and configure it inside.
+      set -euo pipefail
+      NS=wan
+      DEV=enp2s0
+      ADDR=203.0.113.100/24
+      GW=203.0.113.1
+      case "${1:-}" in
+        up)
+          ip netns add "$NS" 2>/dev/null || true
+          if ip -o link show "$DEV" >/dev/null 2>&1; then
+            ip link set "$DEV" netns "$NS"
+          fi
+          ip netns exec "$NS" ip link set lo up
+          ip netns exec "$NS" ip link set "$DEV" up
+          ip netns exec "$NS" ip addr add "$ADDR" dev "$DEV" 2>/dev/null || true
+          ip netns exec "$NS" ip route replace default via "$GW"
+          ;;
+        down)
+          if ip netns list | awk '{print $1}' | grep -qx "$NS"; then
+            ip netns exec "$NS" ip link set "$DEV" netns 1 2>/dev/null || true
+            ip netns del "$NS" 2>/dev/null || true
+          fi
+          ;;
+        status)
+          ip netns exec "$NS" ip -br addr || true
+          ip netns exec "$NS" ip route || true
+          ;;
+        *)
+          echo "usage: $0 up|down|status" >&2
+          exit 2
+          ;;
+      esac
+
+  - path: /etc/systemd/system/trafficgen-wan-ns.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Move enp2s0 into the `wan` network namespace
+      After=network.target systemd-networkd.service
+      Before=iperf3-server@.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/local/sbin/trafficgen-wan-ns up
+      ExecStop=/usr/local/sbin/trafficgen-wan-ns down
+
+      [Install]
+      WantedBy=multi-user.target
 
   - path: /etc/systemd/system/iperf3-server@.service
     permissions: "0644"
     content: |
       [Unit]
-      Description=iperf3 server on port %i
-      After=network.target
+      Description=iperf3 server on port %i (in wan netns)
+      Requires=trafficgen-wan-ns.service
+      After=trafficgen-wan-ns.service
 
       [Service]
-      ExecStart=/usr/bin/iperf3 -s -p %i -1
+      Type=exec
+      ExecStart=/usr/sbin/ip netns exec wan /usr/bin/iperf3 --server --port %i
       Restart=on-failure
+      RestartSec=1
 
       [Install]
       WantedBy=multi-user.target
 
-packages:
-  - iperf3
-  - iputils-ping
-  - tcpdump
-  - jq
+# Packages are pre-baked into the base image by `make base-customise`
+# (the bench bridges have no external NAT, so apt is unreachable at
+# cloud-init time). See bench/Makefile $(BASE_PACKAGES).
 
 runcmd:
   - sysctl --system
   - netplan apply || true
+  - systemctl daemon-reload
+  - systemctl enable --now trafficgen-wan-ns.service
+  - systemctl enable iperf3-server@5201.service

@@ -1,0 +1,145 @@
+#cloud-config
+# TRex VM for thurward bench harness — single-NIC TX-only generator.
+#
+# TRex transmits on enp1s0 (LAN side) toward 203.0.113.200 (sink VM
+# on the WAN bridge). The SUT forwards from LAN to WAN. RX accounting
+# is done by reading /sys/class/net/enp1s0/statistics/rx_packets on
+# the sink VM via SSH from the b00.py driver — not via a TRex RX port,
+# because Linux would short-circuit any locally-bound destination IP
+# through loopback and bypass the firewall entirely.
+#
+# Topology:
+#
+#   TRex VM (10.10.0.200) ── tx ──> SUT enp1s0 (10.10.0.1)
+#                                   SUT forwards
+#                                   SUT enp2s0 (203.0.113.1) ── tx ──> sink VM (203.0.113.200)
+#
+# TRex runs in --software (af_packet) mode on virtio NICs.
+
+hostname: thur-trex
+manage_etc_hosts: true
+
+users:
+  - name: bench
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - "@@HARNESS_SSH_KEY@@"
+
+write_files:
+  - path: /etc/netplan/60-thurward-trex.yaml
+    permissions: "0600"
+    content: |
+      network:
+        version: 2
+        ethernets:
+          enp1s0:
+            dhcp4: false
+            addresses: [10.10.0.200/24]
+            routes:
+              - to: default
+                via: 10.10.0.1
+            optional: true
+          enp2s0:
+            # Required by TRex (port_limit must be even) but we don't
+            # use it for RX — packets are addressed to the sink VM at
+            # 203.0.113.200, which counts them via /sys statistics over
+            # SSH. enp2s0 stays UP but unconfigured at L3.
+            dhcp4: false
+            dhcp6: false
+            optional: true
+
+  - path: /etc/sysctl.d/99-thurward-trex.conf
+    permissions: "0644"
+    content: |
+      net.ipv4.ip_forward = 0
+      net.ipv6.conf.all.disable_ipv6 = 1
+      vm.nr_hugepages = 512
+
+  - path: /etc/trex_cfg.yaml
+    permissions: "0644"
+    content: |
+      ### TRex platform config — 2 ports (TRex requires an even number).
+      ### Port 0 = enp1s0 (LAN, TX → SUT → sink). Port 1 = enp2s0 (no IP,
+      ### unused for RX measurement; sink VM counts packets instead).
+      - port_limit       : 2
+        version          : 2
+        interfaces       : ["enp1s0", "enp2s0"]
+        port_info        :
+            - dest_mac        :  "@@DEST_MAC_0@@"
+              src_mac         :  "@@SRC_MAC_0@@"
+            - dest_mac        :  "ff:ff:ff:ff:ff:ff"
+              src_mac         :  "@@SRC_MAC_1@@"
+        platform :
+            master_thread_id  : 0
+            latency_thread_id : 1
+            dual_if   :
+                  - socket   : 0
+                    threads  : [2,3]
+
+  - path: /usr/local/sbin/trex-prepare
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      # Render /etc/trex_cfg.yaml with this VM's source MAC and the
+      # SUT's LAN MAC as next-hop. Re-run via `systemctl restart` once
+      # the SUT is reachable so ARP resolves to the real MAC, not the
+      # broadcast fallback.
+      set -euo pipefail
+      cfg=/etc/trex_cfg.yaml
+      SRC0=$(ip -br link show enp1s0 | awk '{print $3}')
+      SRC1=$(ip -br link show enp2s0 | awk '{print $3}')
+      arping -I enp1s0 -c 1 -w 2 10.10.0.1 >/dev/null 2>&1 || true
+      DEST0=$(ip neigh show 10.10.0.1 dev enp1s0 | awk '{print $5}' | head -1)
+      : "${DEST0:=ff:ff:ff:ff:ff:ff}"
+      sed -i \
+        -e "s/@@SRC_MAC_0@@/$SRC0/"   -e "s/@@DEST_MAC_0@@/$DEST0/" \
+        -e "s/@@SRC_MAC_1@@/$SRC1/" \
+        "$cfg"
+      echo "trex-prepare: SRC0=$SRC0 DEST0(SUT-LAN)=$DEST0 SRC1=$SRC1"
+
+  - path: /etc/systemd/system/trex-server.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=TRex stateless server (software af_packet mode)
+      After=network-online.target trex-prepare.service
+      Wants=network-online.target
+      Requires=trex-prepare.service
+
+      [Service]
+      Type=simple
+      WorkingDirectory=/opt/trex/current
+      ExecStart=/opt/trex/current/t-rex-64 -i --software --no-scapy-server --no-watchdog
+      Restart=on-failure
+      RestartSec=2
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /etc/systemd/system/trex-prepare.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Render /etc/trex_cfg.yaml with live MACs
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/local/sbin/trex-prepare
+
+      [Install]
+      WantedBy=multi-user.target
+
+# Packages pre-baked into the base image by `make base-customise`.
+
+runcmd:
+  - sysctl --system
+  - netplan apply || true
+  - mkdir -p /opt/trex
+  - bash -c 'tar -xzf /var/tmp/trex-latest.tar.gz -C /opt/trex && ln -sfn /opt/trex/$(tar tzf /var/tmp/trex-latest.tar.gz | head -1 | tr -d /) /opt/trex/current'
+  - systemctl daemon-reload
+  - systemctl enable --now trex-prepare.service
+  - systemctl enable --now trex-server.service

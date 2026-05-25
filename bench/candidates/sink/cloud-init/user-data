@@ -1,0 +1,56 @@
+#cloud-config
+# WAN-side sink VM for the TRex B-NN benchmarks.
+#
+# Receive-only endpoint at 203.0.113.200/24. TRex on the LAN side
+# transmits packets destined for this address; the SUT forwards them
+# across the firewall; the sink receives them on enp1s0. The b00.py
+# driver reads /sys/class/net/enp1s0/statistics/rx_packets via SSH
+# before and after each trial to count received packets.
+#
+# A separate VM is used (rather than a second NIC on the TRex VM)
+# because Linux's local-route shortcut sends any packet destined for
+# a locally-assigned IP via loopback, bypassing the wire entirely.
+# With this VM, the SUT is doing real routing between two distinct
+# Layer-2 endpoints — matching the topology of a production deployment.
+
+hostname: thur-sink
+manage_etc_hosts: true
+
+users:
+  - name: bench
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - "@@HARNESS_SSH_KEY@@"
+
+write_files:
+  - path: /etc/sysctl.d/99-thurward-sink.conf
+    permissions: "0644"
+    content: |
+      # No forwarding — this is a leaf endpoint.
+      net.ipv4.ip_forward = 0
+      # Don't reply to unicast pings if the source isn't on our subnet —
+      # we want the SUT to be the gateway, not us responding to anything.
+      # (Standard behaviour; left explicit for clarity.)
+      net.ipv4.icmp_echo_ignore_broadcasts = 1
+      net.ipv6.conf.all.disable_ipv6 = 1
+
+  - path: /etc/netplan/60-thurward-sink.yaml
+    permissions: "0600"
+    content: |
+      network:
+        version: 2
+        ethernets:
+          enp1s0:
+            dhcp4: false
+            addresses: [203.0.113.200/24]
+            routes:
+              - to: default
+                via: 203.0.113.1
+            optional: true
+
+# Packages pre-baked into the base image by `make base-customise`.
+
+runcmd:
+  - sysctl --system
+  - netplan apply || true
