@@ -89,3 +89,25 @@ jobs:
         uses: wagoid/commitlint-github-action@v6
         with:
           configFile: .commitlintrc.json
+
+  all-checks:
+    name: All Checks
+    # Aggregator job whose single status is what branch-protection rulesets
+    # reference. Adding/removing individual CI jobs no longer requires
+    # touching the ruleset — just update this job's `needs:`.
+    if: always()
+    needs:
+      - markdown-lint
+      - schema-validate
+      - link-check
+      - conventional-commits
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all checks passed
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]] || \
+             [[ "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "One or more checks failed or were cancelled"
+            exit 1
+          fi
+          echo "All checks passed"
