@@ -14,9 +14,9 @@
 #     `destination_fqdn` semantic; the sidecar-resolver + ipset feeder
 #     pattern needed for parity is its own ADR (deferred).
 #
-# Interfaces (per cloud-init):
-#   ens3 = LAN (10.10.0.0/24)
-#   ens4 = WAN (203.0.113.0/24)
+# Interfaces (per cloud-init, Q35 machine type):
+#   enp1s0 = LAN (10.10.0.0/24)
+#   enp2s0 = WAN (203.0.113.0/24)
 # Firewall's own LAN IP is 10.10.0.1 to match the DNS proxy in
 # rules.yaml's `allow-dns-out`.
 
@@ -45,6 +45,11 @@ table inet thurward {
         # intentionally elided in Tier 0 (no sidecar resolver yet).
         ip saddr @lan_clients tcp dport 443 ct state new,established accept
 
+        # allow-iperf3: LAN to TCP/5201 for the bench harness throughput
+        # test (smoke.sh § test 4). Not a real-world rule — only present
+        # on the bench candidate so we can measure forwarded throughput.
+        ip saddr @lan_clients tcp dport 5201 ct state new,established accept
+
         # allow-established: any returning traffic.
         ct state established,related accept
 
@@ -56,15 +61,15 @@ table inet thurward {
         type filter hook input priority 0; policy drop;
 
         # DNS to the firewall (matches `allow-dns-out` in rules.yaml).
-        ip saddr @lan_clients iifname "ens3" udp dport 53 accept
-        ip saddr @lan_clients iifname "ens3" tcp dport 53 accept
+        ip saddr @lan_clients iifname "enp1s0" udp dport 53 accept
+        ip saddr @lan_clients iifname "enp1s0" tcp dport 53 accept
 
         # SSH from LAN — harness access only; never on a real deployment.
-        ip saddr @lan_clients iifname "ens3" tcp dport 22 accept
+        ip saddr @lan_clients iifname "enp1s0" tcp dport 22 accept
 
         # ICMP echo for the smoke test.
-        iifname "ens3" icmp type echo-request accept
-        iifname "ens3" icmpv6 type echo-request accept
+        iifname "enp1s0" icmp type echo-request accept
+        iifname "enp1s0" icmpv6 type echo-request accept
 
         ct state established,related accept
         counter comment "default-deny-input"
@@ -84,7 +89,7 @@ table ip nat {
 
         # DNAT: 203.0.113.10:443/tcp -> 10.10.0.5:443/tcp
         # Matches the worked DNAT in examples/rules.yaml:23-28.
-        iifname "ens4" tcp dport 443 ip daddr 203.0.113.10 \
+        iifname "enp2s0" tcp dport 443 ip daddr 203.0.113.10 \
             dnat to 10.10.0.5:443
     }
 
@@ -93,6 +98,6 @@ table ip nat {
 
         # SNAT/masquerade: 10.10.0.0/24 -> WAN interface IP.
         # Matches the worked SNAT in examples/rules.yaml:18-22.
-        oifname "ens4" ip saddr 10.10.0.0/24 masquerade
+        oifname "enp2s0" ip saddr 10.10.0.0/24 masquerade
     }
 }

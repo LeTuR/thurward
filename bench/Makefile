@@ -105,6 +105,34 @@ $(BASE_IMAGE):
 .PHONY: base-image
 base-image: $(BASE_IMAGE)
 
+# Packages pre-baked into the cached base image. The bench bridges are
+# `forward mode='none'` (no external NAT), so guest VMs cannot reach
+# package mirrors at cloud-init time. virt-customize installs the union
+# of tools every candidate / generator needs before the image is ever
+# cloned. A sentinel file inside the image records that customisation
+# ran, so re-runs are idempotent and don't double-install.
+BASE_PACKAGES := nftables,tcpdump,iperf3,conntrack,iputils-ping,iputils-arping,jq,iproute2,python3
+BASE_CUSTOM_MARK := /var/lib/thurward-bench.customised
+
+$(BASE_IMAGE).customised: $(BASE_IMAGE)
+	@if ! command -v virt-customize >/dev/null 2>&1; then \
+	  echo "ERROR: virt-customize not found (install guestfs-tools)"; exit 1; \
+	fi
+	@if sudo virt-cat -a $(BASE_IMAGE) $(BASE_CUSTOM_MARK) >/dev/null 2>&1; then \
+	  echo "  base image already customised"; \
+	else \
+	  echo "  customising base image with: $(BASE_PACKAGES)"; \
+	  sudo virt-customize -a $(BASE_IMAGE) \
+	    --install $(BASE_PACKAGES) \
+	    --write '/etc/cloud/cloud.cfg.d/99-thurward-nocloud.cfg:datasource_list: [ NoCloud, None ]' \
+	    --truncate /etc/machine-id \
+	    --run-command 'mkdir -p /var/lib && date -u +%FT%TZ > $(BASE_CUSTOM_MARK)'; \
+	fi
+	@touch $@
+
+.PHONY: base-customise base-customize
+base-customise base-customize: $(BASE_IMAGE).customised
+
 # ---------------------------------------------------------------------
 # Networks
 # ---------------------------------------------------------------------
@@ -139,20 +167,19 @@ net-down:
 
 # Per-instance paths.
 SUT_DISK     = $(IMAGES_INST_DIR)/thur-sut-$(CAND).qcow2
-SUT_SEED     = $(IMAGES_INST_DIR)/thur-sut-$(CAND)-seed.iso
 SUT_NAME     = thur-sut-$(CAND)
 SUT_DIR      = $(BENCH_DIR)/candidates/$(CAND)
 SUT_USER     = bench
 
 .PHONY: sub-up
-sub-up: net-up $(BASE_IMAGE) $(HARNESS_KEY)
+sub-up: net-up $(BASE_IMAGE).customised $(HARNESS_KEY)
 	@if [ ! -d $(SUT_DIR) ]; then echo "ERROR: $(SUT_DIR) does not exist (CAND=$(CAND))"; exit 1; fi
 	@mkdir -p $(IMAGES_INST_DIR)
 	@if [ ! -f $(SUT_DISK) ]; then \
 	  echo "Cloning base image to instance: $(SUT_DISK)"; \
 	  qemu-img create -f qcow2 -F qcow2 -b $(BASE_IMAGE) $(SUT_DISK) 20G; \
+	  $(SCRIPTS_DIR)/render-cloud-init.sh $(CAND) sut $(SUT_DISK) $(HARNESS_KEY_PUB); \
 	fi
-	@$(SCRIPTS_DIR)/render-cloud-init.sh $(CAND) sut $(SUT_SEED) $(HARNESS_KEY_PUB)
 	@if ! virsh -c $(LIBVIRT_URI) dominfo $(SUT_NAME) >/dev/null 2>&1; then \
 	  echo "Defining $(SUT_NAME)"; \
 	  virt-install --connect $(LIBVIRT_URI) \
@@ -161,7 +188,6 @@ sub-up: net-up $(BASE_IMAGE) $(HARNESS_KEY)
 	    --cpu host-passthrough \
 	    --osinfo debian12 \
 	    --disk path=$(SUT_DISK),format=qcow2,bus=virtio \
-	    --disk path=$(SUT_SEED),device=cdrom,bus=sata \
 	    --network network=lan-thurward,model=virtio \
 	    --network network=wan-thurward,model=virtio \
 	    --graphics none --console pty,target_type=serial \
@@ -193,16 +219,15 @@ sub-shell:
 # ---------------------------------------------------------------------
 
 GEN_DISK := $(IMAGES_INST_DIR)/thur-gen.qcow2
-GEN_SEED := $(IMAGES_INST_DIR)/thur-gen-seed.iso
 GEN_NAME := thur-gen
 
 .PHONY: gen-up
-gen-up: net-up $(BASE_IMAGE) $(HARNESS_KEY)
+gen-up: net-up $(BASE_IMAGE).customised $(HARNESS_KEY)
 	@mkdir -p $(IMAGES_INST_DIR)
 	@if [ ! -f $(GEN_DISK) ]; then \
 	  qemu-img create -f qcow2 -F qcow2 -b $(BASE_IMAGE) $(GEN_DISK) 20G; \
+	  $(SCRIPTS_DIR)/render-cloud-init.sh trafficgen gen $(GEN_DISK) $(HARNESS_KEY_PUB); \
 	fi
-	@$(SCRIPTS_DIR)/render-cloud-init.sh trafficgen gen $(GEN_SEED) $(HARNESS_KEY_PUB)
 	@if ! virsh -c $(LIBVIRT_URI) dominfo $(GEN_NAME) >/dev/null 2>&1; then \
 	  virt-install --connect $(LIBVIRT_URI) \
 	    --name $(GEN_NAME) \
@@ -210,7 +235,6 @@ gen-up: net-up $(BASE_IMAGE) $(HARNESS_KEY)
 	    --cpu host-passthrough \
 	    --osinfo debian12 \
 	    --disk path=$(GEN_DISK),format=qcow2,bus=virtio \
-	    --disk path=$(GEN_SEED),device=cdrom,bus=sata \
 	    --network network=lan-thurward,model=virtio \
 	    --network network=wan-thurward,model=virtio \
 	    --graphics none --console pty,target_type=serial \
@@ -228,6 +252,117 @@ gen-down:
 	  virsh -c $(LIBVIRT_URI) undefine $(GEN_NAME) --nvram 2>/dev/null || true; \
 	  echo "  $(GEN_NAME): down"; \
 	fi
+
+# ---------------------------------------------------------------------
+# WAN-side sink VM (for TRex B-NN: avoids same-VM loopback shortcut)
+# ---------------------------------------------------------------------
+
+SINK_DISK    := $(IMAGES_INST_DIR)/thur-sink.qcow2
+SINK_NAME    := thur-sink
+SINK_WAN_IP  := 203.0.113.200
+
+.PHONY: sink-up
+sink-up: net-up $(BASE_IMAGE).customised $(HARNESS_KEY)
+	@mkdir -p $(IMAGES_INST_DIR)
+	@if [ ! -f $(SINK_DISK) ]; then \
+	  echo "Cloning base image to sink instance"; \
+	  qemu-img create -f qcow2 -F qcow2 -b $(BASE_IMAGE) $(SINK_DISK) 20G; \
+	  $(SCRIPTS_DIR)/render-cloud-init.sh sink gen $(SINK_DISK) $(HARNESS_KEY_PUB); \
+	fi
+	@if ! virsh -c $(LIBVIRT_URI) dominfo $(SINK_NAME) >/dev/null 2>&1; then \
+	  virt-install --connect $(LIBVIRT_URI) \
+	    --name $(SINK_NAME) \
+	    --memory 1024 --vcpus 1 \
+	    --cpu host-passthrough \
+	    --osinfo debian12 \
+	    --disk path=$(SINK_DISK),format=qcow2,bus=virtio \
+	    --network network=wan-thurward,model=virtio \
+	    --graphics none --console pty,target_type=serial \
+	    --import --noautoconsole --noreboot; \
+	fi
+	@if [ "$$(virsh -c $(LIBVIRT_URI) domstate $(SINK_NAME))" != "running" ]; then \
+	  virsh -c $(LIBVIRT_URI) start $(SINK_NAME); \
+	fi
+	@echo "  $(SINK_NAME): running (WAN $(SINK_WAN_IP))"
+
+.PHONY: sink-down
+sink-down:
+	@if virsh -c $(LIBVIRT_URI) dominfo $(SINK_NAME) >/dev/null 2>&1; then \
+	  virsh -c $(LIBVIRT_URI) destroy $(SINK_NAME) 2>/dev/null || true; \
+	  virsh -c $(LIBVIRT_URI) undefine $(SINK_NAME) --nvram 2>/dev/null || true; \
+	  echo "  $(SINK_NAME): down"; \
+	fi
+
+# ---------------------------------------------------------------------
+# TRex generator lifecycle (replaces gen-up for RFC-9411 measurements)
+# ---------------------------------------------------------------------
+
+TREX_TARBALL := $(BENCH_DIR)/images/trex/trex-latest.tar.gz
+TREX_DISK    := $(IMAGES_INST_DIR)/thur-trex.qcow2
+TREX_NAME    := thur-trex
+TREX_LAN_IP  := 10.10.0.200
+
+# Fetch TRex tarball (~270 MB). Cisco's CDN doesn't send the
+# intermediate cert in the TLS chain, so we use -k and verify the
+# tarball is a valid gzip afterwards.
+$(TREX_TARBALL):
+	@mkdir -p $(dir $@)
+	@if [ ! -f $@ ]; then \
+	  echo "Downloading TRex tarball (~270 MB)..."; \
+	  curl -fSL -k --connect-timeout 30 -o $@.tmp \
+	    https://trex-tgn.cisco.com/trex/release/latest; \
+	  file $@.tmp | grep -q 'gzip compressed' || { echo "ERROR: not a gzip"; rm $@.tmp; exit 1; }; \
+	  mv $@.tmp $@; \
+	fi
+	@ls -lh $@
+
+.PHONY: trex-fetch
+trex-fetch: $(TREX_TARBALL)
+
+.PHONY: trex-up
+trex-up: net-up $(BASE_IMAGE).customised $(HARNESS_KEY) $(TREX_TARBALL)
+	@mkdir -p $(IMAGES_INST_DIR)
+	@if [ ! -f $(TREX_DISK) ]; then \
+	  echo "Cloning base image to TRex instance"; \
+	  qemu-img create -f qcow2 -F qcow2 -b $(BASE_IMAGE) $(TREX_DISK) 30G; \
+	  $(SCRIPTS_DIR)/render-cloud-init.sh trex gen $(TREX_DISK) $(HARNESS_KEY_PUB); \
+	fi
+	@if ! virsh -c $(LIBVIRT_URI) dominfo $(TREX_NAME) >/dev/null 2>&1; then \
+	  echo "Defining $(TREX_NAME)"; \
+	  virt-install --connect $(LIBVIRT_URI) \
+	    --name $(TREX_NAME) \
+	    --memory 4096 --vcpus 4 \
+	    --cpu host-passthrough \
+	    --osinfo debian12 \
+	    --disk path=$(TREX_DISK),format=qcow2,bus=virtio \
+	    --network network=lan-thurward,model=virtio \
+	    --network network=wan-thurward,model=virtio \
+	    --memorybacking hugepages=on \
+	    --graphics none --console pty,target_type=serial \
+	    --import --noautoconsole --noreboot; \
+	fi
+	@if [ "$$(virsh -c $(LIBVIRT_URI) domstate $(TREX_NAME))" != "running" ]; then \
+	  virsh -c $(LIBVIRT_URI) start $(TREX_NAME); \
+	fi
+	@echo "  $(TREX_NAME): running (LAN $(TREX_LAN_IP))"
+
+.PHONY: trex-down
+trex-down:
+	@if virsh -c $(LIBVIRT_URI) dominfo $(TREX_NAME) >/dev/null 2>&1; then \
+	  virsh -c $(LIBVIRT_URI) destroy $(TREX_NAME) 2>/dev/null || true; \
+	  virsh -c $(LIBVIRT_URI) undefine $(TREX_NAME) --nvram 2>/dev/null || true; \
+	  echo "  $(TREX_NAME): down"; \
+	fi
+
+# B-00: reference path, empty ruleset. SUT is booted in pass-through
+# (no rules.nft loaded — see candidates/nftables/rules-empty.nft).
+B00_RESULT_DIR := $(RESULTS_DIR)/b-00/$(TODAY)
+
+.PHONY: b-00
+b-00: trex-up sink-up sub-up
+	@mkdir -p $(B00_RESULT_DIR)
+	@$(SCRIPTS_DIR)/b00.sh $(CAND) $(B00_RESULT_DIR) $(HARNESS_KEY) $(TREX_LAN_IP) $(SINK_WAN_IP)
+	@echo "  result: $(B00_RESULT_DIR)/result.json"
 
 # ---------------------------------------------------------------------
 # Smoke test (Tier-0 reachability + iperf3 sanity)
@@ -252,7 +387,7 @@ status:
 	@virsh -c $(LIBVIRT_URI) list --all
 
 .PHONY: tear-down
-tear-down: sub-down gen-down net-down
+tear-down: sub-down gen-down trex-down sink-down net-down
 	@echo "  harness fully torn down"
 
 .PHONY: distclean

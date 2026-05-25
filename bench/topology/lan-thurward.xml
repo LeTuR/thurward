@@ -9,7 +9,11 @@ See bench/README.md for the broader topology overview.
   <name>lan-thurward</name>
   <forward mode='none'/>
   <bridge name='thur-lan0' stp='off' delay='0'/>
-  <ip address='10.10.0.1' netmask='255.255.255.0'>
+  <!-- Host-side bridge IP. The SUT owns 10.10.0.1 (gateway from the
+       LAN client's point of view); the host reaches the VMs from
+       10.10.0.254 so the harness can ssh in without colliding with
+       the SUT's address. -->
+  <ip address='10.10.0.254' netmask='255.255.255.0'>
     <!-- No <dhcp> block on purpose: every guest has a static IP via
          cloud-init. DHCP on the same wire would race the static
          assignment and re-key conntrack at boot. -->

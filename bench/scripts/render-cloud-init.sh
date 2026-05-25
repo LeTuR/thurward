@@ -1,20 +1,26 @@
 #!/bin/bash
-# render-cloud-init.sh — substitute the harness SSH key (and, for the
-# nftables candidate, the rules.nft contents) into the cloud-init
-# templates, then pack a seed ISO that libvirt can attach as a virtio
-# CD-ROM.
+# render-cloud-init.sh — render cloud-init user-data/meta-data and
+# inject them into the *instance qcow2* under
+# /var/lib/cloud/seed/nocloud/.  This is cloud-init's well-known
+# NoCloud seed path; ds-identify always picks it up regardless of
+# CD-ROM/blkid timing or virtio-vs-SATA quirks.
 #
-# Usage: render-cloud-init.sh <candidate> <role> <out-iso> <pubkey-file>
-#   candidate = subdir name under bench/candidates/ (e.g. nftables, trafficgen)
-#   role      = sut | gen   (sut: full rules + nftables; gen: simpler)
-#   out-iso   = path to write seed ISO
-#   pubkey-file = path to SSH public key
+# We deliberately bypass the cloud-localds + seed-ISO route: the ISO
+# approach turned out to be fragile on Q35 + virt-customised images
+# (ds-identify wouldn't run, then with `ds=nocloud` cmdline cloud-init
+# would read user-data from the (empty) cmdline instead of the ISO).
+#
+# Usage: render-cloud-init.sh <candidate> <role> <instance-qcow2> <pubkey-file>
+#   candidate     = subdir under bench/candidates/ (e.g. nftables, trafficgen)
+#   role          = sut | gen   (sut: full rules + nftables; gen: simpler)
+#   instance-qcow2 = path to the per-instance qcow2 to inject into
+#   pubkey-file   = path to SSH public key
 
 set -euo pipefail
 
 CAND="${1:?candidate (subdir under bench/candidates/) required}"
 ROLE="${2:?role (sut|gen) required}"
-OUT_ISO="${3:?output ISO path required}"
+INST_DISK="${3:?instance qcow2 path required}"
 PUBKEY_FILE="${4:?SSH public key path required}"
 
 if [ ! -f "$PUBKEY_FILE" ]; then
@@ -34,20 +40,15 @@ PUBKEY="$(cat "$PUBKEY_FILE")"
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
 
-# Copy templates into the workdir so we can substitute in place.
 cp "$TEMPLATE_DIR/user-data" "$WORKDIR/user-data"
 cp "$TEMPLATE_DIR/meta-data" "$WORKDIR/meta-data"
 
 # Render @@HARNESS_SSH_KEY@@.
-# Use Python instead of sed because the pubkey contains slashes and
-# `+` characters that mis-trigger sed.
 python3 - "$WORKDIR/user-data" "$PUBKEY" <<'PY'
 import sys, pathlib
 path = pathlib.Path(sys.argv[1])
 key  = sys.argv[2]
-text = path.read_text()
-text = text.replace("@@HARNESS_SSH_KEY@@", key)
-path.write_text(text)
+path.write_text(path.read_text().replace("@@HARNESS_SSH_KEY@@", key))
 PY
 
 # For the nftables SUT, splice in the rules.nft contents.
@@ -57,19 +58,35 @@ if [ "$ROLE" = "sut" ] && [ -f "$BENCH_DIR/candidates/$CAND/rules.nft" ]; then
 import sys, pathlib, textwrap
 target = pathlib.Path(sys.argv[1])
 rules  = pathlib.Path(sys.argv[2]).read_text()
-# cloud-init's content block under write_files needs each line indented
-# by 6 spaces (4 for the YAML "    content: |" + 2 for the literal block).
 indented = textwrap.indent(rules, "      ")
-text = target.read_text().replace("      @@RULES_NFT@@", indented)
-target.write_text(text)
+target.write_text(target.read_text().replace("      @@RULES_NFT@@", indented))
 PY
 fi
 
-# Build the seed ISO.
-if ! command -v cloud-localds >/dev/null 2>&1; then
-  echo "ERROR: cloud-localds not found (install cloud-image-utils)" >&2
+if ! command -v virt-customize >/dev/null 2>&1; then
+  echo "ERROR: virt-customize not found (install guestfs-tools)" >&2
   exit 1
 fi
 
-cloud-localds "$OUT_ISO" "$WORKDIR/user-data" "$WORKDIR/meta-data"
-echo "  seed ISO: $OUT_ISO"
+# Build the virt-customize argument list.  Seed always goes in; the
+# trex candidate also gets the pre-downloaded TRex tarball injected
+# into /var/tmp/ so cloud-init can extract it offline (the bench
+# bridges have no NAT).
+declare -a VC_ARGS=(
+  --mkdir /var/lib/cloud/seed/nocloud
+  --upload "$WORKDIR/user-data:/var/lib/cloud/seed/nocloud/user-data"
+  --upload "$WORKDIR/meta-data:/var/lib/cloud/seed/nocloud/meta-data"
+)
+
+if [ "$CAND" = "trex" ]; then
+  TREX_TARBALL="$BENCH_DIR/images/trex/trex-latest.tar.gz"
+  if [ ! -f "$TREX_TARBALL" ]; then
+    echo "ERROR: TRex tarball missing at $TREX_TARBALL — run 'make trex-fetch' first" >&2
+    exit 1
+  fi
+  VC_ARGS+=( --upload "$TREX_TARBALL:/var/tmp/trex-latest.tar.gz" )
+fi
+
+sudo virt-customize -a "$INST_DISK" "${VC_ARGS[@]}" >/dev/null
+
+echo "  cloud-init seed injected into $INST_DISK${CAND:+ (candidate=$CAND)}"

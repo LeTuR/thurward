@@ -63,6 +63,36 @@ for tgt in "$SUT_LAN_IP" "$GEN_LAN_IP"; do
   done
 done
 
+# --- Wait for cloud-init to finish on both VMs -------------------------------
+# Tests after this point assume the firewall ruleset is loaded and the
+# trafficgen wan-netns is set up.  Without this barrier, the ruleset check
+# can race with cloud-init's runcmd that enables `nftables-thurward.service`.
+
+log "waiting for cloud-init to finish on SUT + gen ..."
+gen "cloud-init status --wait" >>"$RAW_LOG" 2>&1 || true
+sut "cloud-init status --wait" >>"$RAW_LOG" 2>&1 || true
+
+# --- Test 0: SUT ruleset loaded (security-effectiveness precondition) -------
+# Done up-front, before tests 1-4 generate traffic. We poll
+# `systemctl is-active` rather than `sudo nft list | grep` because the
+# latter races with cloud-init's runcmd and depends on sudo/NOPASSWD
+# being live; `is-active` only requires a working sshd. The oneshot
+# unit reaches "active (exited)" only after `nft -f /etc/nftables.conf`
+# returns, so this is a direct signal that the ruleset is loaded.
+
+log "test 0: verify SUT nftables-thurward.service is active"
+RULESET_OK=false
+for i in 1 2 3 4 5; do
+  state=$(sut "systemctl is-active nftables-thurward.service" 2>>"$RAW_LOG" || true)
+  log "  attempt $i: state=$state"
+  if [ "$state" = "active" ]; then
+    RULESET_OK=true
+    break
+  fi
+  sleep 2
+done
+log "  result: RULESET_OK=$RULESET_OK"
+
 # --- Test 1: ICMP echo from gen-LAN to SUT-LAN  ------------------------------
 
 log "test 1: ICMP from gen-LAN ($GEN_LAN_IP) to SUT-LAN ($SUT_LAN_IP)"
@@ -74,8 +104,11 @@ fi
 log "  result: ICMP_LAN_OK=$ICMP_LAN_OK"
 
 # --- Test 2: forwarded ICMP from gen-LAN to a WAN-side IP --------------------
-# The gen has a route 203.0.113.0/24 via 10.10.0.1 (per its cloud-init).
-# This exercises the FORWARD chain.
+# The gen's root netns has only a default route via 10.10.0.1 — enp2s0
+# lives in the `wan` netns (see candidates/trafficgen/cloud-init/user-data),
+# so the only path to 203.0.113.0/24 is *through* the SUT. This is what
+# forces the FORWARD chain to be exercised even though both endpoints
+# happen to live in the same VM.
 
 log "test 2: forwarded ICMP gen-LAN -> WAN address (203.0.113.50)"
 if gen "ping -W 2 -c 3 203.0.113.50" >>"$RAW_LOG" 2>&1; then
@@ -112,16 +145,6 @@ else
   IPERF_OK=false
 fi
 log "  result: IPERF_BPS=$IPERF_BPS"
-
-# --- Test 5: confirm SUT ruleset is loaded -----------------------------------
-
-log "test 5: verify SUT ruleset is loaded"
-if sut "sudo nft list ruleset" 2>>"$RAW_LOG" | grep -q 'table inet thurward'; then
-  RULESET_OK=true
-else
-  RULESET_OK=false
-fi
-log "  result: RULESET_OK=$RULESET_OK"
 
 # --- Assemble JSON result ----------------------------------------------------
 
