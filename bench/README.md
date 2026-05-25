@@ -98,6 +98,63 @@ make tear-down                    # destroy everything
 
 Results land under `bench/results/smoke/<UTC-date>/` as JSON.
 
+## Scope decision: throughput is Tier-1 only
+
+The bench tree contains a TRex generator + sink-VM scaffolding
+(`make trex-up`, `make sink-up`, `make b-00`) but **headline throughput
+numbers (B-00 through B-13) are deliberately out of scope on Tier 0**.
+
+Reasoning:
+
+- The host is a developer workstation. The SUT VM has 1 vCPU; the
+  virtio-net path between qemu processes caps well below TRex's
+  software-mode ceiling, which itself caps well below TRex's normal
+  DPDK-NIC ceiling. **Any throughput number produced here measures the
+  virtio path, not the SUT's envelope.**
+- `tests/benchmarks.md` § 0.6 already says B-00 is a per-environment
+  control: if the control itself is loss-limited, downstream B-NN
+  numbers are not reportable. On this Tier-0 setup the control is
+  always loss-limited.
+- The right time to run B-00..B-13 is on the Tier-1 lab box
+  ([`ROADMAP.md`](./ROADMAP.md)) — physical NIC + SR-IOV + RT kernel +
+  dedicated NUMA node. Until that hardware exists, those benchmarks
+  are intentionally skipped, not faked.
+
+What stays in scope on Tier 0:
+
+- **Smoke** (`make smoke`) — reachability + ruleset-loaded precondition
+  (per `tests/benchmarks.md` § 0.8).
+- **Functional correctness** — rule translation discipline (§ 0.7),
+  scenarios.md, security-effectiveness checks.
+- **Footprint metrics** (B-21 image size, B-22 RSS, B-23 launch time,
+  B-24 idle latency) — these are workstation-friendly and produce
+  per-candidate numbers that don't depend on throughput.
+
+The TRex/sink scaffolding stays in the tree so the Tier-1 box can run
+B-00..B-13 immediately when it arrives — no harness rewrite needed.
+
+## Latest Tier-0 smoke run
+
+Run on 2026-05-25 against the `nftables` candidate on an Arch
+workstation (Intel i7-8700K @ 3.7 GHz, virtio-net, 1 vCPU SUT).
+Verdict: ✅ `OK` — precondition (`§ 0.8`) satisfied.
+
+| Probe                                       | Result            | Interpretation                                                |
+| ------------------------------------------- | ----------------- | ------------------------------------------------------------- |
+| SUT `nftables-thurward.service`             | `active`          | Ruleset loaded; security-effectiveness precondition met       |
+| ICMP gen-LAN → SUT-LAN (`10.10.0.1`)        | reachable         | `input` chain permits ICMP on `enp1s0` as designed            |
+| ICMP gen-LAN → WAN (`203.0.113.50`)         | dropped (correct) | `forward` chain default-deny working                          |
+| TCP/443 gen-LAN → WAN                       | crossed firewall  | `allow-github-https` rule active                              |
+| iperf3 gen-LAN → gen-WAN-netns through SUT  | **~14 Gbps**      | TCP/5201 allowed; virtio-bounded (see Tier-0 caveat below)    |
+
+**Tier-0 caveat.** ~14 Gbps is the virtio-net path between two qemu
+processes on the same host — not the SUT envelope. See the "Scope
+decision" section above and [`ROADMAP.md`](./ROADMAP.md) Tier-1 for
+where comparable-to-vendor numbers will come from.
+
+Run-specific result JSON lands under `results/smoke/<UTC-date>/` (not
+in git — the per-run output is gitignored).
+
 ## Methodology pointer
 
 Every harness run **must** satisfy the methodology in

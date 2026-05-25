@@ -14,19 +14,27 @@ characterising behaviour in thurward's ~1 Gbps v1 envelope.
 - Single host (developer workstation)
 - KVM + libvirt + virtio-net
 - Host-internal libvirt bridges, no physical NICs
-- iperf3 + ping for smoke; TRex (in a VM) for headline benchmarks
+- iperf3 + ping for smoke; TRex scaffolding present but not used for
+  headline numbers at this tier (see below)
 
 **What it can measure**
 
 - Functional correctness (security-effectiveness precondition,
   `tests/benchmarks.md` § 0.8 — does the firewall actually enforce its
   rules?)
-- Throughput up to ~1–2 Gbps with caveats
-- Latency on the order of 100s of µs (host scheduler noise included)
+- Footprint metrics (B-21..B-24): image size, RSS, launch time, idle
+  latency baseline
 - Conntrack / NAT correctness at moderate scale
 
-**What it can't measure**
+**What it can't measure (and won't try to)**
 
+- **Throughput (B-00..B-13).** Defer to Tier 1. The 1-vCPU SUT plus
+  virtio path bottlenecks well below TRex's software-mode ceiling,
+  which itself sits well below TRex's normal DPDK-NIC ceiling. Any
+  number here would be a harness measurement, not a SUT one. The
+  TRex/sink VMs are in the tree and runnable (`make b-00`), but the
+  resulting numbers are explicitly labelled "harness ceiling" in the
+  output JSON and not promoted as SUT capability.
 - VPP's 10+ Mpps DPDK ceiling
 - Sub-microsecond latency
 - Sustained PPS at small frames against physical-NIC line rate
