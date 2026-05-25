@@ -65,23 +65,23 @@ environment, thurward v1 is not for you.
 
 ## No bare-metal direct boot (v1)
 
-A prior revision of this architecture lifted bare-metal x86_64 EFI
-direct boot to a v1 first-class target on Unikraft. The substrate
-switch to Hermit ([ADR 0017](decisions/0017-hermit-rust-substrate.md))
-walks that back: Hermit's bare-metal story is less mature than
-Unikraft's, and rather than weaken either the substrate decision or
-the bare-metal promise, v1 commits to Hermit and defers bare-metal
-to v2.
-
 v1 targets are **QEMU/KVM** and **Firecracker** only
-([06 — Deployment](06-deployment.md)). If you need a dedicated-hardware
-deployment today, run a small Linux+KVM appliance image on the box and
-launch Firecracker (Path B) on top.
+([06 — Deployment](06-deployment.md)). Bare-metal x86_64 EFI direct
+boot is deferred to v2 — per
+[ADR 0017](decisions/0017-hermit-rust-substrate.md) and
+[ADR 0018](decisions/0018-substrate-pivot-unikraft.md), both
+substrate-related decisions explicitly keep bare-metal out of v1
+scope. Unikraft does have a credible bare-metal direct-boot story,
+but v1 does not exercise it.
 
-The v2 ADR for bare-metal will revisit the trade-off: Hermit may have
-matured, or a Linux+KVM appliance image may be the pragmatic answer,
-or a different unikernel's bare-metal story may have caught up
-(Unikraft on ARM, MirageOS, etc.).
+If you need a dedicated-hardware deployment today, run a small
+Linux+KVM appliance image on the box and launch Firecracker (Path B)
+on top.
+
+The v2 ADR for bare-metal will revisit the trade-off: Unikraft's
+bare-metal target may be ready to lift, or a Linux+KVM appliance
+image may remain the pragmatic answer, or a different unikernel's
+bare-metal story may have caught up (MirageOS, etc.).
 
 ARM in general is also not in v1.
 
@@ -139,24 +139,28 @@ For Path A (QEMU) and Path B (Firecracker), the host kernel must have
 `vhost_vsock` loaded (`modprobe vhost_vsock`). Without it, the
 observability channel doesn't open.
 
-## Hermit framework maturity
+## `lib-rust` on Unikraft is early-adopter territory
 
-Hermit ([ADR 0017](decisions/0017-hermit-rust-substrate.md)) is
-actively developed but has a smaller user base than Unikraft. Expect
-a narrower set of example projects and Stack Overflow answers when
-diagnosing build or runtime issues. Upstream patches for bugs we
-hit may take longer to land than they would on a larger framework.
+Unikraft's Rust integration (`lib-rust`) is less mature than its C
+support. Some Rust crates that assume a hosted runtime (`std::*`) may
+not build cleanly inside the image — the hot loop is already
+`no_std`-friendly per [ADR 0013](decisions/0013-zig-fast-path-on-uknetdev.md),
+but adding new runtime dependencies needs a `no_std` check. Build-
+time crates run on the host and aren't subject to this constraint.
+Upstream patches we contribute to `lib-rust` may take longer to land
+than they would in Unikraft's C ecosystem.
 
 ## Toolchain pinning is heavier than the prior Zig stack
 
-The Rust + Hermit + smoltcp stack pins more moving parts than the
-prior Zig + Unikraft stack did: `rust-toolchain.toml` (rustup channel
-+ components), `Cargo.lock` (every transitive crate), the Hermit
-framework revision, and the smoltcp crate version all live in
-`versions.lock` (see
-[ADR 0010](decisions/0010-supply-chain-hardening.md)). Upgrades are
-deliberate, reviewed actions with reproducibility re-validation —
-not passive `cargo update` runs.
+The Rust + Unikraft + smoltcp stack pins more moving parts than the
+prior Zig stack did: `rust-toolchain.toml` (rustup channel +
+components), `Cargo.lock` (every transitive crate), the Unikraft
+revision plus each selected `lib-*` component revision, and the
+smoltcp crate version all live in `versions.lock` (see
+[ADR 0010](decisions/0010-supply-chain-hardening.md) and
+[ADR 0018](decisions/0018-substrate-pivot-unikraft.md)). Upgrades
+are deliberate, reviewed actions with reproducibility re-validation
+— not passive `cargo update` runs.
 
 ## Out of scope explicitly
 

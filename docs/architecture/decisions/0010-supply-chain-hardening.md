@@ -22,9 +22,12 @@ trust what they're about to install.
 The threats this ADR addresses:
 
 - Compromised CI runner injecting malicious code into the image.
-- Compromised upstream dependency (Hermit, Rust toolchain, smoltcp,
-  or any other transitive crate in `Cargo.lock`). See
-  [ADR 0017](0017-hermit-rust-substrate.md) for the substrate stack.
+- Compromised upstream dependency (Unikraft + selected `lib-*`
+  components, Rust toolchain, smoltcp, or any other transitive crate
+  in `Cargo.lock`). See
+  [ADR 0018](0018-substrate-pivot-unikraft.md) for the substrate
+  stack and [ADR 0017](0017-hermit-rust-substrate.md) for the
+  language and parser-library choices.
 - Compromised developer pushing bad rules / bad code without review.
 - Compromised image registry (or any intermediate mirror) serving a
   swapped image to a user.
@@ -40,13 +43,14 @@ inventing our own.
 The build pipeline implements these practices end-to-end:
 
 1. **Pinned dependencies.** Under
-   [ADR 0017](0017-hermit-rust-substrate.md): `rust-toolchain.toml`
-   (rustup channel + components), `Cargo.lock` (every crate +
-   transitive), the Hermit framework revision, and the smoltcp crate
-   version are all pinned in a single `versions.lock` file (the
-   `versions.lock` file references the individual artifacts above and
-   acts as the single source of truth a build either matches or
-   fails). CI fails if any drift.
+   [ADR 0017](0017-hermit-rust-substrate.md) (language + parser) and
+   [ADR 0018](0018-substrate-pivot-unikraft.md) (substrate):
+   `rust-toolchain.toml` (rustup channel + components), `Cargo.lock`
+   (every crate + transitive), the Unikraft revision plus each
+   selected `lib-*` component revision, and the smoltcp crate version
+   are all pinned in a single `versions.lock` file (it references the
+   individual artifacts above and acts as the single source of truth
+   a build either matches or fails). CI fails if any drift.
 2. **Reproducible builds.** Given the same source tree, the same
    `versions.lock`, and the same build environment image, two builds
    produce byte-identical output. The build environment itself is

@@ -5,8 +5,9 @@ the filter sits, where NAT happens, and what the fast path looks like.*
 
 The decisions framing this chapter:
 
-- [ADR 0017](decisions/0017-hermit-rust-substrate.md) — substrate is
-  Hermit + Rust + smoltcp wire types (no socket layer).
+- [ADR 0018](decisions/0018-substrate-pivot-unikraft.md) — substrate
+  is Unikraft + Rust + smoltcp wire types (no socket layer);
+  language clause via [ADR 0017](decisions/0017-hermit-rust-substrate.md).
 - [ADR 0013](decisions/0013-zig-fast-path-on-uknetdev.md) — the
   application owns the data path; no in-image TCP/IP socket layer
   between the driver and the filter.
@@ -25,7 +26,7 @@ WAN interface traverses the following sequence:
 sequenceDiagram
     autonumber
     participant NIC0 as virtio-net (LAN)
-    participant POLL as Hermit RX poll
+    participant POLL as uknetdev RX poll
     participant PARSE as Rust parse (smoltcp::wire)
     participant CT as conntrack
     participant FILT as filter
@@ -65,10 +66,10 @@ destination IPs (see [ADR 0014](decisions/0014-stateful-nat.md) §
 
 ## Where the code lives
 
-Hermit exposes the virtio-net device through a low-level RX/TX
-descriptor API; thurward's Rust crate calls into it directly. The
-`main` function spawns one **RX poll thread per interface**, each
-running:
+Unikraft's `lib-uknetdev` exposes each virtio-net device through a
+low-level RX/TX descriptor API; thurward's Rust crate calls into it
+directly. The `main` function spawns one **RX poll thread per
+interface**, each running:
 
 ```rust
 // src/dataplane.rs — sketch, not the implementation
@@ -121,7 +122,7 @@ The filter does NOT do payload inspection. No DPI, no L7 — just the
   per-thread conntrack shards (the 5–10 Gbps stretch in
   [ADR 0013](decisions/0013-zig-fast-path-on-uknetdev.md)) is additive,
   not a redesign.
-- **Hot-loop discipline:** no allocator calls, no syscalls (Hermit's
+- **Hot-loop discipline:** no allocator calls, no syscalls (the
   unikernel model — application runs in kernel space — helps here),
   batched RX/TX descriptors, slice-based smoltcp parsers that don't
   copy, branch-prediction-friendly common-case parsing.
