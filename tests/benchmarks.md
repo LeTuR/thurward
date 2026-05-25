@@ -27,6 +27,12 @@ Compare:   <per-candidate expectation>
 
 ## 0. Methodology
 
+**Implementation harness:** [`bench/`](../bench/) implements the
+methodology below. Tier-0 (workstation + virtio) ships today; Tier-1
+(physical NIC + SR-IOV + RT kernel) is the path described in
+[`bench/ROADMAP.md`](../bench/ROADMAP.md). Every result JSON written
+by the harness conforms to [`bench/results/SCHEMA.md`](../bench/results/SCHEMA.md).
+
 ### 0.1 Standards alignment
 
 This spec follows, in order of authority:
