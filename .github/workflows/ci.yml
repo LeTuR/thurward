@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  markdown-lint:
+    name: Markdown lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Lint markdown
+        uses: DavidAnson/markdownlint-cli2-action@v18
+        with:
+          globs: |
+            **/*.md
+            !node_modules
+
+  schema-validate:
+    name: Schema validation (rules.yaml)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install validator deps
+        run: npm install --no-save ajv@8 ajv-formats@3 js-yaml@4
+      - name: Validate examples/rules.yaml against schemas/rules.schema.json
+        run: |
+          node - <<'JS'
+          const Ajv = require("ajv/dist/2020.js");
+          const addFormats = require("ajv-formats");
+          const yaml = require("js-yaml");
+          const fs = require("fs");
+          const schema = JSON.parse(fs.readFileSync("schemas/rules.schema.json"));
+          const data = yaml.load(fs.readFileSync("examples/rules.yaml", "utf8"));
+          const ajv = new Ajv({ strict: false, allErrors: true });
+          addFormats(ajv);
+          const validate = ajv.compile(schema);
+          if (validate(data)) {
+            console.log("schema validation: OK");
+            process.exit(0);
+          }
+          console.error("schema validation FAILED:");
+          for (const err of validate.errors) {
+            console.error("  ", err.instancePath, err.message);
+          }
+          process.exit(1);
+          JS
+
+  link-check:
+    name: Link check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run lychee
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --no-progress --include-fragments --exclude-mail './**/*.md'
+          fail: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  conventional-commits:
+    name: Conventional Commits
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify commit messages
+        uses: wagoid/commitlint-github-action@v6
+        with:
+          configFile: .commitlintrc.json
