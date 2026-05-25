@@ -90,6 +90,28 @@ jobs:
         with:
           configFile: .commitlintrc.json
 
+  rust:
+    name: Rust (test + clippy + fmt)
+    # Compiles the rule pipeline, runs the integration tests, and enforces
+    # clippy and rustfmt. The Hermit target lands in PR B/C; this job stays
+    # host-only.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust toolchain (per rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Cache Cargo registry + build
+        uses: Swatinem/rust-cache@v2
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+      - name: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: cargo test
+        run: cargo test --all-targets
+
   all-checks:
     name: All Checks
     # Aggregator job whose single status is what branch-protection rulesets
@@ -101,6 +123,7 @@ jobs:
       - schema-validate
       - link-check
       - conventional-commits
+      - rust
     runs-on: ubuntu-latest
     steps:
       - name: Verify all checks passed
